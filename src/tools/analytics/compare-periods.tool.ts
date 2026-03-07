@@ -32,6 +32,13 @@ export const comparePeriodsSchema = z.object({
     ])
     .default("today_vs_yesterday")
     .describe("OPTIONAL. Comparison period (default: today_vs_yesterday)."),
+  group_by_country: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe(
+      "OPTIONAL. If true, returns breakdown per country in one call instead of aggregate total.",
+    ),
 });
 
 export type ComparePeriodsInput = z.infer<typeof comparePeriodsSchema>;
@@ -93,16 +100,77 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
   };
 }
 
+function computeDelta(current: number, previous: number) {
+  const delta = current - previous;
+  const deltaPct =
+    previous > 0
+      ? Math.round((delta / previous) * 100)
+      : current > 0
+        ? 100
+        : 0;
+  const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+  return { delta, delta_pct: deltaPct, trend };
+}
+
+const PERIOD_LABELS: Record<string, [string, string]> = {
+  today_vs_yesterday: ["today", "yesterday"],
+  this_week_vs_last: ["this week", "last week"],
+  last_1h_vs_prev_1h: ["last 1h", "previous 1h"],
+  last_4h_vs_prev_4h: ["last 4h", "previous 4h"],
+};
+
 export async function comparePeriods(params: ComparePeriodsInput) {
   const start = Date.now();
-
   const ranges = getTimeRanges(params.period);
   const statusFilter = getStatusFilter(params.metric);
+  const [currentLabel, previousLabel] = PERIOD_LABELS[params.period];
 
   const baseFilter: Record<string, unknown> = {};
   if (params.country_code) baseFilter.country_code = params.country_code;
   if (params.city) baseFilter.main_city = params.city;
   if (statusFilter) Object.assign(baseFilter, statusFilter);
+
+  if (params.group_by_country) {
+    const [currentAgg, previousAgg] = await Promise.all([
+      Order.aggregate([
+        { $match: { ...baseFilter, createdAt: { $gte: ranges.current.start, $lt: ranges.current.end } } },
+        { $group: { _id: "$country_code", count: { $sum: 1 } } },
+      ]).exec(),
+      Order.aggregate([
+        { $match: { ...baseFilter, createdAt: { $gte: ranges.previous.start, $lt: ranges.previous.end } } },
+        { $group: { _id: "$country_code", count: { $sum: 1 } } },
+      ]).exec(),
+    ]);
+
+    const prevMap = new Map(previousAgg.map((r: { _id: string; count: number }) => [r._id, r.count]));
+    const countries = new Set([
+      ...currentAgg.map((r: { _id: string }) => r._id),
+      ...previousAgg.map((r: { _id: string }) => r._id),
+    ]);
+
+    const breakdown = [...countries].sort().map((cc) => {
+      const cur = currentAgg.find((r: { _id: string }) => r._id === cc)?.count ?? 0;
+      const prev = prevMap.get(cc) ?? 0;
+      return { country_code: cc, current: cur, previous: prev, ...computeDelta(cur, prev) };
+    });
+
+    const totalCur = breakdown.reduce((s, r) => s + r.current, 0);
+    const totalPrev = breakdown.reduce((s, r) => s + r.previous, 0);
+
+    const result = {
+      metric: params.metric,
+      period: params.period,
+      current_label: currentLabel,
+      previous_label: previousLabel,
+      breakdown,
+      total: { current: totalCur, previous: totalPrev, ...computeDelta(totalCur, totalPrev) },
+      summary: `${params.metric} by country (${currentLabel} vs ${previousLabel}): ${breakdown.map((r) => `${r.country_code}: ${r.current} vs ${r.previous} (${r.delta >= 0 ? "+" : ""}${r.delta_pct}%)`).join(", ")}.`,
+    };
+
+    const executionTime = Date.now() - start;
+    logQuery({ tool: "compare_periods", params, query: `aggregate x2 grouped by country (${params.period})`, execution_time_ms: executionTime, result_count: breakdown.length });
+    return wrapToolResponse(result, { query: `orders.aggregate x2 group by country_code (${params.period})`, collection: "orders", execution_time_ms: executionTime, result_count: breakdown.length });
+  }
 
   const [currentCount, previousCount] = await Promise.all([
     Order.countDocuments({
@@ -115,22 +183,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     }),
   ]);
 
-  const delta = currentCount - previousCount;
-  const deltaPct =
-    previousCount > 0
-      ? Math.round((delta / previousCount) * 100)
-      : currentCount > 0
-        ? 100
-        : 0;
-  const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
-
-  const periodLabels: Record<string, string[]> = {
-    today_vs_yesterday: ["today", "yesterday"],
-    this_week_vs_last: ["this week", "last week"],
-    last_1h_vs_prev_1h: ["last 1h", "previous 1h"],
-    last_4h_vs_prev_4h: ["last 4h", "previous 4h"],
-  };
-  const [currentLabel, previousLabel] = periodLabels[params.period];
+  const { delta, delta_pct: deltaPct, trend } = computeDelta(currentCount, previousCount);
 
   const result = {
     metric: params.metric,
@@ -149,7 +202,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     delta,
     delta_pct: deltaPct,
     trend,
-    summary: `${params.metric} ${trend === "up" ? "increased" : trend === "down" ? "decreased" : "unchanged"}: ${currentCount} ${currentLabel} vs ${previousCount} ${previousLabel} (${delta >= 0 ? "+" : ""}${deltaPct}%) in ${params.country_code}${params.city ? `/${params.city}` : ""}.`,
+    summary: `${params.metric} ${trend === "up" ? "increased" : trend === "down" ? "decreased" : "unchanged"}: ${currentCount} ${currentLabel} vs ${previousCount} ${previousLabel} (${delta >= 0 ? "+" : ""}${deltaPct}%) in ${params.country_code ?? "all"}${params.city ? `/${params.city}` : ""}.`,
   };
 
   const executionTime = Date.now() - start;

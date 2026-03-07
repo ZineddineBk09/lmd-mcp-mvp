@@ -269,7 +269,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: "compare_periods",
     namespace: "analytics",
     description:
-      "Compare a metric between two time periods (today vs yesterday, etc.).",
+      "Compare a metric between two time periods. Set group_by_country=true for per-country breakdown in one call.",
     schema: comparePeriodsSchema,
     handler: (p) => comparePeriods(comparePeriodsSchema.parse(p)),
     annotations: READ_ONLY,

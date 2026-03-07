@@ -104,7 +104,7 @@ function buildSystemPrompt(settings: {
   return prompt;
 }
 
-const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS = 12;
 
 async function main() {
   await connectMongoDB();
@@ -137,14 +137,14 @@ async function main() {
   app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
   app.use(express.json({ limit: "1mb" }));
 
-  const apiLimiter = rateLimit({
+  const chatLimiter = rateLimit({
     windowMs: 60_000,
-    max: parseInt(process.env.RATE_LIMIT_RPM || "30", 10),
+    max: parseInt(process.env.RATE_LIMIT_RPM || "60", 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later." },
   });
-  app.use("/api/", apiLimiter);
+  app.use("/api/chat", chatLimiter);
 
   const API_KEY = process.env.API_KEY;
   if (API_KEY) {
