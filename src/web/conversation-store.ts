@@ -4,6 +4,7 @@ import {
   writeFileSync,
   readFileSync,
   readdirSync,
+  unlinkSync,
 } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,4 +79,11 @@ export function listConversations(): Array<{
       };
     })
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+}
+
+export function deleteConversation(id: string): boolean {
+  const filePath = resolve(STORE_DIR, `${id}.json`);
+  if (!existsSync(filePath)) return false;
+  unlinkSync(filePath);
+  return true;
 }

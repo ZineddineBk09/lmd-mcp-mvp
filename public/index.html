@@ -127,9 +127,12 @@ select:focus{border-color:var(--primary)}
 .msg-bubble th{background:var(--surface);font-weight:500}
 
 /* Conversation list */
-.conv-item{width:100%;padding:8px 10px;background:none;border:1px solid transparent;color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:12px;text-align:left;margin-bottom:4px;transition:.15s}
+.conv-item{width:100%;padding:8px 10px;background:none;border:1px solid transparent;color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:12px;text-align:left;margin-bottom:4px;transition:.15s;display:flex;align-items:center;justify-content:space-between;gap:4px}
 .conv-item:hover{background:var(--surface2);border-color:var(--border)}
 .conv-item.active{background:var(--surface2);border-color:var(--primary-dim);color:var(--primary-light)}
+.conv-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;opacity:0;transition:.15s;flex-shrink:0}
+.conv-item:hover .conv-del{opacity:1}
+.conv-del:hover{color:var(--accent);background:rgba(251,37,118,.15)}
 
 /* Responsive */
 @media(max-width:768px){
@@ -278,13 +281,30 @@ async function loadConversationList() {
     const container = $("conversationList");
     container.innerHTML = "";
     list.slice(0, 20).forEach(c => {
-      const btn = document.createElement("button");
-      btn.className = "conv-item" + (c.id === conversationId ? " active" : "");
-      btn.textContent = new Date(c.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-      btn.title = `${c.message_count} messages`;
-      btn.onclick = () => resumeConversation(c.id);
-      container.appendChild(btn);
+      const row = document.createElement("div");
+      row.className = "conv-item" + (c.id === conversationId ? " active" : "");
+      const label = document.createElement("span");
+      label.textContent = new Date(c.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      label.title = `${c.message_count} messages`;
+      label.style.cursor = "pointer";
+      label.onclick = () => resumeConversation(c.id);
+      const del = document.createElement("button");
+      del.className = "conv-del";
+      del.innerHTML = "&#x2715;";
+      del.title = "Delete";
+      del.onclick = (e) => { e.stopPropagation(); deleteConversation(c.id); };
+      row.appendChild(label);
+      row.appendChild(del);
+      container.appendChild(row);
     });
+  } catch {}
+}
+
+async function deleteConversation(id) {
+  try {
+    await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+    if (id === conversationId) clearChat();
+    loadConversationList();
   } catch {}
 }
 

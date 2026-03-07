@@ -15,6 +15,7 @@ import {
   saveConversation,
   loadConversation,
   listConversations,
+  deleteConversation,
 } from "./conversation-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -207,6 +208,11 @@ async function main() {
     };
     saveConversation(req.params.id, messages, settings);
     res.json({ status: "saved" });
+  });
+
+  app.delete("/api/conversations/:id", (req, res) => {
+    const deleted = deleteConversation(req.params.id);
+    res.json({ status: deleted ? "deleted" : "not_found" });
   });
 
   app.post("/api/export", async (req, res) => {
