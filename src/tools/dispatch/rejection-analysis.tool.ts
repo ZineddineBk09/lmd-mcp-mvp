@@ -5,8 +5,16 @@ import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 export const rejectionAnalysisSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
   since_minutes: z
     .number()
     .default(60)
@@ -55,7 +63,9 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
 
   const [orders, cityConfig] = await Promise.all([
     Order.aggregate(pipeline),
-    params.country_code ? City.findOne({ country_code: params.country_code }).lean() : Promise.resolve(null),
+    params.country_code
+      ? City.findOne({ country_code: params.country_code }).lean()
+      : Promise.resolve(null),
   ]);
 
   const maxRejections = cityConfig?.max_rejected_drivers || 10;
@@ -75,7 +85,10 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
     .map(([driverId, count]) => ({ driver_id: driverId, rejections: count }));
 
   // City breakdown
-  const cityBreakdown: Record<string, { total_orders: number; total_rejections: number }> = {};
+  const cityBreakdown: Record<
+    string,
+    { total_orders: number; total_rejections: number }
+  > = {};
   for (const order of orders) {
     const city = order.main_city || "unknown";
     if (!cityBreakdown[city]) {
@@ -85,13 +98,14 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
     cityBreakdown[city].total_rejections += order.rejection_count;
   }
 
-  const atLimitOrders = orders.filter((o) => o.rejection_count >= maxRejections);
-  const totalRejections = orders.reduce(
-    (sum, o) => sum + o.rejection_count,
-    0
+  const atLimitOrders = orders.filter(
+    (o) => o.rejection_count >= maxRejections,
   );
+  const totalRejections = orders.reduce((sum, o) => sum + o.rejection_count, 0);
   const avgRejectionsPerOrder =
-    orders.length > 0 ? Math.round((totalRejections / orders.length) * 10) / 10 : 0;
+    orders.length > 0
+      ? Math.round((totalRejections / orders.length) * 10) / 10
+      : 0;
 
   const executionTime = Date.now() - start;
 
@@ -128,6 +142,6 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
       collection: "orders",
       execution_time_ms: executionTime,
       result_count: orders.length,
-    }
+    },
   );
 }

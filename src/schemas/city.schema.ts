@@ -44,7 +44,7 @@ const citySchema = new Schema(
     cityname: String,
     state: String,
   },
-  { collection: "cities", strict: false }
+  { collection: "cities", strict: false },
 );
 
 export const City =

@@ -10,8 +10,11 @@ export async function connectMongoDB(): Promise<typeof mongoose> {
     throw new Error("DB_URI environment variable is required");
   }
 
+  const dbName = process.env.DB_NAME;
+
   await mongoose.connect(uri, {
     readPreference: "secondaryPreferred",
+    ...(dbName && { dbName }),
   });
 
   connected = true;

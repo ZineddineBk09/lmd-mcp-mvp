@@ -4,21 +4,30 @@ import { Driver } from "../../schemas/driver.schema.js";
 import { Order } from "../../schemas/order.schema.js";
 import { wrapToolResponse } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
-import { ORDER_STATUS_LABELS, ACTIVE_ORDER_STATUSES } from "../../constants/order-status.js";
+import {
+  ORDER_STATUS_LABELS,
+  ACTIVE_ORDER_STATUSES,
+} from "../../constants/order-status.js";
 
 export const lookupDriverSchema = z.object({
   driver_id: z
     .string()
     .optional()
-    .describe("MongoDB _id of the driver. Provide exactly one of driver_id, phone, or username."),
+    .describe(
+      "MongoDB _id of the driver. Provide exactly one of driver_id, phone, or username.",
+    ),
   phone: z
     .string()
     .optional()
-    .describe("Driver phone number. Provide exactly one of driver_id, phone, or username."),
+    .describe(
+      "Driver phone number. Provide exactly one of driver_id, phone, or username.",
+    ),
   username: z
     .string()
     .optional()
-    .describe("Driver username. Provide exactly one of driver_id, phone, or username."),
+    .describe(
+      "Driver username. Provide exactly one of driver_id, phone, or username.",
+    ),
 });
 
 export type LookupDriverInput = z.infer<typeof lookupDriverSchema>;
@@ -35,7 +44,7 @@ export async function lookupDriver(params: LookupDriverInput) {
   if (!params.driver_id && !params.phone && !params.username) {
     return wrapToolResponse(
       { error: "Provide at least one of: driver_id, phone, or username." },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 }
+      { query: "N/A", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -46,7 +55,7 @@ export async function lookupDriver(params: LookupDriverInput) {
     } catch {
       return wrapToolResponse(
         { error: `Invalid driver_id format: "${params.driver_id}"` },
-        { query: "N/A", execution_time_ms: 0, result_count: 0 }
+        { query: "N/A", execution_time_ms: 0, result_count: 0 },
       );
     }
   } else if (params.phone) {
@@ -69,7 +78,11 @@ export async function lookupDriver(params: LookupDriverInput) {
     const searchBy = params.driver_id || params.phone || params.username;
     return wrapToolResponse(
       { error: `Driver not found for: ${searchBy}` },
-      { query: `db.drivers.findOne(${JSON.stringify(filter)})`, execution_time_ms: Date.now() - start, result_count: 0 }
+      {
+        query: `db.drivers.findOne(${JSON.stringify(filter)})`,
+        execution_time_ms: Date.now() - start,
+        result_count: 0,
+      },
     );
   }
 
@@ -81,7 +94,7 @@ export async function lookupDriver(params: LookupDriverInput) {
   const [activeOrders, todayStats] = await Promise.all([
     Order.find(
       { driver_id: driverId, status: { $in: ACTIVE_ORDER_STATUSES } },
-      { _id: 1, status: 1, main_city: 1, createdAt: 1, restaurant_id: 1 }
+      { _id: 1, status: 1, main_city: 1, createdAt: 1, restaurant_id: 1 },
     )
       .sort({ createdAt: -1 })
       .limit(10)
@@ -94,7 +107,9 @@ export async function lookupDriver(params: LookupDriverInput) {
           _id: null,
           total: { $sum: 1 },
           delivered: { $sum: { $cond: [{ $eq: ["$status", 7] }, 1, 0] } },
-          cancelled: { $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] } },
+          cancelled: {
+            $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] },
+          },
         },
       },
     ]),
@@ -112,11 +127,14 @@ export async function lookupDriver(params: LookupDriverInput) {
     : null;
 
   const address = raw.address as Record<string, unknown> | undefined;
-  const currentOrders = raw.currentOrders as Record<string, unknown> | undefined;
+  const currentOrders = raw.currentOrders as
+    | Record<string, unknown>
+    | undefined;
   const location = raw.location as Record<string, unknown> | undefined;
 
   const driverPhone = (raw.phone ?? {}) as Record<string, unknown>;
-  const displayName = [raw.username, raw.last_name].filter(Boolean).join(" ") || null;
+  const displayName =
+    [raw.username, raw.last_name].filter(Boolean).join(" ") || null;
 
   const result = {
     driver_id: String(driverId),
@@ -124,10 +142,14 @@ export async function lookupDriver(params: LookupDriverInput) {
     first_name: raw.first_name ?? null,
     last_name: raw.last_name ?? null,
     email: raw.email ?? null,
-    phone: driverPhone.code && driverPhone.number ? `${driverPhone.code}${driverPhone.number}` : null,
+    phone:
+      driverPhone.code && driverPhone.number
+        ? `${driverPhone.code}${driverPhone.number}`
+        : null,
     main_city: raw.main_city ?? null,
     status: raw.currentStatus,
-    status_label: DRIVER_STATUS_LABELS[raw.currentStatus as number] ?? "unknown",
+    status_label:
+      DRIVER_STATUS_LABELS[raw.currentStatus as number] ?? "unknown",
     is_logged_in: raw.logout === 0,
     availability: raw.avail ?? null,
     country_code: address?.country_code ?? null,
@@ -150,7 +172,8 @@ export async function lookupDriver(params: LookupDriverInput) {
     active_orders: activeOrders.map((o: Record<string, unknown>) => ({
       _id: String(o._id),
       status: o.status,
-      status_label: ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
+      status_label:
+        ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
       city: o.main_city ?? null,
       created_at: o.createdAt,
     })),

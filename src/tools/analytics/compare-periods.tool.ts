@@ -14,16 +14,22 @@ export const comparePeriodsSchema = z.object({
   country_code: z
     .string()
     .optional()
-    .describe("OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries."),
-  city: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. City name to filter."),
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.",
+    ),
+  city: z.string().optional().describe("OPTIONAL. City name to filter."),
   metric: z
     .enum(["orders", "deliveries", "cancellations", "timeouts"])
-    .describe("REQUIRED. Metric to compare: orders (total), deliveries (status=7), cancellations (status 9,10,90), timeouts (status 11)."),
+    .describe(
+      "REQUIRED. Metric to compare: orders (total), deliveries (status=7), cancellations (status 9,10,90), timeouts (status 11).",
+    ),
   period: z
-    .enum(["today_vs_yesterday", "this_week_vs_last", "last_1h_vs_prev_1h", "last_4h_vs_prev_4h"])
+    .enum([
+      "today_vs_yesterday",
+      "this_week_vs_last",
+      "last_1h_vs_prev_1h",
+      "last_4h_vs_prev_4h",
+    ])
     .default("today_vs_yesterday")
     .describe("OPTIONAL. Comparison period (default: today_vs_yesterday)."),
 });
@@ -43,7 +49,10 @@ function getStatusFilter(metric: string): Record<string, unknown> | null {
   }
 }
 
-function getTimeRanges(period: keyof typeof PERIOD_PRESETS): { current: { start: Date; end: Date }; previous: { start: Date; end: Date } } {
+function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
+  current: { start: Date; end: Date };
+  previous: { start: Date; end: Date };
+} {
   const now = new Date();
 
   if (period === "today_vs_yesterday") {
@@ -74,7 +83,9 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): { current: { start:
   const currentEnd = now;
   const currentStart = new Date(now.getTime() - preset.currentHours * 3600000);
   const previousEnd = currentStart;
-  const previousStart = new Date(currentStart.getTime() - preset.previousHours * 3600000);
+  const previousStart = new Date(
+    currentStart.getTime() - preset.previousHours * 3600000,
+  );
 
   return {
     current: { start: currentStart, end: currentEnd },
@@ -105,7 +116,12 @@ export async function comparePeriods(params: ComparePeriodsInput) {
   ]);
 
   const delta = currentCount - previousCount;
-  const deltaPct = previousCount > 0 ? Math.round((delta / previousCount) * 100) : currentCount > 0 ? 100 : 0;
+  const deltaPct =
+    previousCount > 0
+      ? Math.round((delta / previousCount) * 100)
+      : currentCount > 0
+        ? 100
+        : 0;
   const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
 
   const periodLabels: Record<string, string[]> = {
@@ -120,8 +136,16 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     metric: params.metric,
     country_code: params.country_code,
     city: params.city ?? "all",
-    current_period: { label: currentLabel, count: currentCount, range: ranges.current },
-    previous_period: { label: previousLabel, count: previousCount, range: ranges.previous },
+    current_period: {
+      label: currentLabel,
+      count: currentCount,
+      range: ranges.current,
+    },
+    previous_period: {
+      label: previousLabel,
+      count: previousCount,
+      range: ranges.previous,
+    },
     delta,
     delta_pct: deltaPct,
     trend,

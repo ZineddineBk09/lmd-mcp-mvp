@@ -4,11 +4,22 @@ import { Driver } from "../../schemas/driver.schema.js";
 import { Restaurant } from "../../schemas/restaurant.schema.js";
 import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
-import { ORDER_STATUS, ORDER_STATUS_LABELS } from "../../constants/order-status.js";
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_LABELS,
+} from "../../constants/order-status.js";
 
 export const shiftReportSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
   hours: z
     .number()
     .default(8)
@@ -53,7 +64,8 @@ export async function getShiftReport(params: ShiftReportInput) {
   const ordersCancelledUser = statusMap[ORDER_STATUS.CANCELLED_BY_USER] ?? 0;
   const ordersCancelledAdmin = statusMap[ORDER_STATUS.CANCELLED_BY_ADMIN] ?? 0;
   const ordersRejected = statusMap[ORDER_STATUS.RESTAURANT_REJECTED_ORDER] ?? 0;
-  const ordersCancelledAfterPickup = statusMap[ORDER_STATUS.CANCELLED_AFTER_PICKUP] ?? 0;
+  const ordersCancelledAfterPickup =
+    statusMap[ORDER_STATUS.CANCELLED_AFTER_PICKUP] ?? 0;
 
   const deliveryRate =
     totalOrders > 0
@@ -108,7 +120,12 @@ export async function getShiftReport(params: ShiftReportInput) {
         rejection_rate: {
           $cond: [
             { $gt: ["$total", 0] },
-            { $round: [{ $multiply: [{ $divide: ["$rejected", "$total"] }, 100] }, 1] },
+            {
+              $round: [
+                { $multiply: [{ $divide: ["$rejected", "$total"] }, 100] },
+                1,
+              ],
+            },
             0,
           ],
         },
@@ -123,7 +140,7 @@ export async function getShiftReport(params: ShiftReportInput) {
   const restIds = worstRestaurants.map((r) => r._id);
   const restInfo = await Restaurant.find(
     { _id: { $in: restIds } },
-    { name: 1, restaurantAvailability: 1 }
+    { restaurantname: 1, restaurantAvailability: 1 },
   ).lean();
   const restMap = new Map(restInfo.map((r) => [r._id.toString(), r]));
 
@@ -132,7 +149,8 @@ export async function getShiftReport(params: ShiftReportInput) {
   const driverFilter: Record<string, unknown> = {
     status: 1,
   };
-  if (params.country_code) driverFilter["address.country_code"] = params.country_code;
+  if (params.country_code)
+    driverFilter["address.country_code"] = params.country_code;
   if (params.city) driverFilter["address.city"] = params.city;
 
   const [onlineNow, totalDrivers] = await Promise.all([
@@ -149,7 +167,8 @@ export async function getShiftReport(params: ShiftReportInput) {
   const restFilter: Record<string, unknown> = {
     "restaurantAvailability.isBusy": true,
   };
-  if (params.country_code) restFilter["address.country_code"] = params.country_code;
+  if (params.country_code)
+    restFilter["address.country_code"] = params.country_code;
   if (params.city) restFilter["address.city"] = params.city;
 
   const autoBusyCount = await Restaurant.countDocuments(restFilter);
@@ -196,7 +215,7 @@ export async function getShiftReport(params: ShiftReportInput) {
             ? Math.round(
                 (rejectionStats.total_rejections /
                   rejectionStats.total_orders_with_rejections) *
-                  10
+                  10,
               ) / 10
             : 0,
       },
@@ -210,7 +229,7 @@ export async function getShiftReport(params: ShiftReportInput) {
           const info = restMap.get(r._id?.toString());
           return {
             restaurant_id: r._id?.toString(),
-            name: info?.name ?? "Unknown",
+            name: info?.restaurantname ?? "Unknown",
             total_orders: r.total,
             rejected: r.rejected,
             rejection_rate: r.rejection_rate,
@@ -224,6 +243,6 @@ export async function getShiftReport(params: ShiftReportInput) {
       collection: "orders + drivers + restaurant",
       execution_time_ms: executionTime,
       result_count: totalOrders,
-    }
+    },
   );
 }

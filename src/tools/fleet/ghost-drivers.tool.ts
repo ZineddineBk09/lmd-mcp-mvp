@@ -4,8 +4,16 @@ import { wrapToolResponse, formatMongoQuery } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 export const ghostDriversSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
   stale_threshold_minutes: z
     .number()
     .default(5)
@@ -36,7 +44,8 @@ export async function getGhostDrivers(params: GhostDriversInput) {
     Driver.find(filter, {
       _id: 1,
       username: 1,
-      fullname: 1,
+      first_name: 1,
+      last_name: 1,
       last_update_time: 1,
       "address.city": 1,
       currentOrders: 1,
@@ -61,11 +70,13 @@ export async function getGhostDrivers(params: GhostDriversInput) {
     {
       ghost_drivers: ghosts.map((d) => {
         const lastSeen = new Date(d.last_update_time);
-        const minutesAgo = Math.round((Date.now() - d.last_update_time) / 60000);
+        const minutesAgo = Math.round(
+          (Date.now() - d.last_update_time) / 60000,
+        );
         return {
           _id: d._id.toString(),
           username: d.username,
-          fullname: d.fullname,
+          name: [d.username, d.last_name].filter(Boolean).join(" ") || null,
           city: d.address?.city,
           last_seen: lastSeen.toISOString(),
           minutes_since_update: minutesAgo,
@@ -74,13 +85,14 @@ export async function getGhostDrivers(params: GhostDriversInput) {
       }),
       total_ghost_count: totalCount,
       threshold_minutes: params.stale_threshold_minutes,
-      recommendations: totalCount > 0
-        ? [
-            `${totalCount} ghost drivers detected — they appear online but have stale GPS data`,
-            "These drivers will receive dispatch requests but won't respond, causing delays",
-            "Consider: force-logout, send ping notification, or exclude from dispatch",
-          ]
-        : ["No ghost drivers detected — fleet GPS data is fresh"],
+      recommendations:
+        totalCount > 0
+          ? [
+              `${totalCount} ghost drivers detected — they appear online but have stale GPS data`,
+              "These drivers will receive dispatch requests but won't respond, causing delays",
+              "Consider: force-logout, send ping notification, or exclude from dispatch",
+            ]
+          : ["No ghost drivers detected — fleet GPS data is fresh"],
       summary: `${totalCount} ghost drivers in ${params.country_code}${params.city ? ` / ${params.city}` : ""} (no GPS update in >${params.stale_threshold_minutes} min).`,
     },
     {
@@ -88,6 +100,6 @@ export async function getGhostDrivers(params: GhostDriversInput) {
       collection: "drivers",
       execution_time_ms: executionTime,
       result_count: totalCount,
-    }
+    },
   );
 }

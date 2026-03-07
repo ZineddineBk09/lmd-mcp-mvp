@@ -1,6 +1,7 @@
 import { z } from "zod";
 import mongoose from "mongoose";
 import { wrapToolResponse } from "../../utils/fact-check.js";
+import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
 
 const BLOCKED_COLLECTIONS = new Set([
   "system.views",
@@ -69,29 +70,46 @@ export const listCollectionsSchema = z.object({
   include_empty: z
     .boolean()
     .default(false)
-    .describe("OPTIONAL. If true, include collections with 0 documents (default: false)."),
+    .describe(
+      "OPTIONAL. If true, include collections with 0 documents (default: false).",
+    ),
 });
 
 export type ListCollectionsInput = z.infer<typeof listCollectionsSchema>;
 
+const CACHE_TTL_MS = 300_000;
+
 export async function listCollections(params: ListCollectionsInput) {
+  const cacheKey = buildCacheKey(
+    "list_collections",
+    params as Record<string, unknown>,
+  );
+  const cached =
+    cacheGet<Awaited<ReturnType<typeof wrapToolResponse>>>(cacheKey);
+  if (cached) return cached;
+
   const start = Date.now();
 
   const db = mongoose.connection.db;
   if (!db) {
     return wrapToolResponse(
       { error: "Database not connected" },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 }
+      { query: "N/A", execution_time_ms: 0, result_count: 0 },
     );
   }
 
   try {
     const collections = await db.listCollections().toArray();
 
-    const results: Array<{ name: string; documents: number; hint?: string }> = [];
+    const results: Array<{ name: string; documents: number; hint?: string }> =
+      [];
 
     const countPromises = collections
-      .filter((c) => !BLOCKED_COLLECTIONS.has(c.name) && !DEPRECATED_COLLECTIONS.has(c.name))
+      .filter(
+        (c) =>
+          !BLOCKED_COLLECTIONS.has(c.name) &&
+          !DEPRECATED_COLLECTIONS.has(c.name),
+      )
       .map(async (c) => {
         const count = await db.collection(c.name).estimatedDocumentCount();
         return { name: c.name, count };
@@ -118,7 +136,7 @@ export async function listCollections(params: ListCollectionsInput) {
       return `${r.name} (${r.documents} docs)${hint}`;
     });
 
-    return wrapToolResponse(
+    const response = wrapToolResponse(
       {
         total_collections: results.length,
         collections: summary,
@@ -129,8 +147,10 @@ export async function listCollections(params: ListCollectionsInput) {
         query: "db.getCollectionNames()",
         execution_time_ms: Date.now() - start,
         result_count: results.length,
-      }
+      },
     );
+    cacheSet(cacheKey, response, CACHE_TTL_MS);
+    return response;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return wrapToolResponse(
@@ -139,7 +159,7 @@ export async function listCollections(params: ListCollectionsInput) {
         query: "db.getCollectionNames()",
         execution_time_ms: Date.now() - start,
         result_count: 0,
-      }
+      },
     );
   }
 }

@@ -1,25 +1,43 @@
 import { z } from "zod";
 import { Driver } from "../../schemas/driver.schema.js";
-import { City } from "../../schemas/city.schema.js";
 import { wrapToolResponse, formatMongoQuery } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
+import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
 
 export const fleetStatusSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
 });
 
 export type FleetStatusInput = z.infer<typeof fleetStatusSchema>;
 
 const STALE_THRESHOLD_MS = 300_000;
 
+const CACHE_TTL_MS = 15_000;
+
 export async function fleetStatus(params: FleetStatusInput) {
+  const cacheKey = buildCacheKey(
+    "fleet_status",
+    params as Record<string, unknown>,
+  );
+  const cached = cacheGet<ReturnType<typeof wrapToolResponse>>(cacheKey);
+  if (cached) return cached;
+
   const start = Date.now();
 
   const baseFilter: Record<string, unknown> = {
     status: 1,
   };
-  if (params.country_code) baseFilter["address.country_code"] = params.country_code;
+  if (params.country_code)
+    baseFilter["address.country_code"] = params.country_code;
   if (params.city) {
     baseFilter["address.city"] = params.city;
   }
@@ -83,7 +101,7 @@ export async function fleetStatus(params: FleetStatusInput) {
           ? "MODERATE"
           : "HEALTHY";
 
-  return wrapToolResponse(
+  const response = wrapToolResponse(
     {
       country_code: params.country_code ?? "all",
       city: params.city ?? "all",
@@ -101,6 +119,8 @@ export async function fleetStatus(params: FleetStatusInput) {
       collection: "drivers",
       execution_time_ms: executionTime,
       result_count: totalCount,
-    }
+    },
   );
+  cacheSet(cacheKey, response, CACHE_TTL_MS);
+  return response;
 }

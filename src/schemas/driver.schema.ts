@@ -18,7 +18,8 @@ export interface IDriver extends Document {
     pickedUpOrdersCount: number;
   };
   username: string;
-  fullname: string;
+  first_name?: string;
+  last_name?: string;
 }
 
 const driverSchema = new Schema(
@@ -43,9 +44,10 @@ const driverSchema = new Schema(
       pickedUpOrdersCount: { type: Number, default: 0 },
     },
     username: String,
-    fullname: String,
+    first_name: String,
+    last_name: String,
   },
-  { collection: "drivers", strict: false }
+  { collection: "drivers", strict: false },
 );
 
 export const Driver =

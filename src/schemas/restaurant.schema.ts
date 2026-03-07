@@ -13,7 +13,7 @@ export interface IRestaurant extends Document {
     country_code: string;
     city: string;
   };
-  name: string;
+  restaurantname: string;
 }
 
 const restaurantSchema = new Schema(
@@ -30,9 +30,9 @@ const restaurantSchema = new Schema(
       country_code: String,
       city: String,
     },
-    name: String,
+    restaurantname: String,
   },
-  { collection: "restaurant", strict: false }
+  { collection: "restaurant", strict: false },
 );
 
 export const Restaurant =

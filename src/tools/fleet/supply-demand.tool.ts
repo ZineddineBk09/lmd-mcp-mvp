@@ -5,17 +5,35 @@ import { City } from "../../schemas/city.schema.js";
 import { wrapToolResponse } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 import { ACTIVE_ORDER_STATUSES } from "../../constants/order-status.js";
+import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
 
 export const supplyDemandSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
 });
 
 export type SupplyDemandInput = z.infer<typeof supplyDemandSchema>;
 
 const STALE_THRESHOLD_MS = 300_000;
+const CACHE_TTL_MS = 15_000;
 
 export async function getSupplyDemandBalance(params: SupplyDemandInput) {
+  const cacheKey = buildCacheKey(
+    "supply_demand_balance",
+    params as Record<string, unknown>,
+  );
+  const cached =
+    cacheGet<Awaited<ReturnType<typeof wrapToolResponse>>>(cacheKey);
+  if (cached) return cached;
+
   const start = Date.now();
   const freshThreshold = Date.now() - STALE_THRESHOLD_MS;
 
@@ -31,7 +49,8 @@ export async function getSupplyDemandBalance(params: SupplyDemandInput) {
     logout: 0,
     last_update_time: { $gte: freshThreshold },
   };
-  if (params.country_code) driverMatch["address.country_code"] = params.country_code;
+  if (params.country_code)
+    driverMatch["address.country_code"] = params.country_code;
   if (params.city) driverMatch["address.city"] = params.city;
 
   const busyMatch: Record<string, unknown> = {
@@ -40,15 +59,19 @@ export async function getSupplyDemandBalance(params: SupplyDemandInput) {
     logout: 0,
     last_update_time: { $gte: freshThreshold },
   };
-  if (params.country_code) busyMatch["address.country_code"] = params.country_code;
+  if (params.country_code)
+    busyMatch["address.country_code"] = params.country_code;
   if (params.city) busyMatch["address.city"] = params.city;
 
-  const [activeOrders, onlineDrivers, busyDriverCount, cityConfig] = await Promise.all([
-    Order.countDocuments(orderMatch),
-    Driver.countDocuments(driverMatch),
-    Driver.countDocuments(busyMatch),
-    params.country_code ? City.findOne({ country_code: params.country_code }).lean() : Promise.resolve(null),
-  ]);
+  const [activeOrders, onlineDrivers, busyDriverCount, cityConfig] =
+    await Promise.all([
+      Order.countDocuments(orderMatch),
+      Driver.countDocuments(driverMatch),
+      Driver.countDocuments(busyMatch),
+      params.country_code
+        ? City.findOne({ country_code: params.country_code }).lean()
+        : Promise.resolve(null),
+    ]);
 
   const maxOrders = cityConfig?.max_orders || 3;
   const availableCount = onlineDrivers;
@@ -83,7 +106,7 @@ export async function getSupplyDemandBalance(params: SupplyDemandInput) {
   const recommendations: string[] = [];
   if (severity === "CRITICAL" || severity === "HIGH") {
     recommendations.push(
-      `Widen dispatch radius from ${cityConfig?.driver_radius || 20} to ${(cityConfig?.driver_radius || 20) + 10}`
+      `Widen dispatch radius from ${cityConfig?.driver_radius || 20} to ${(cityConfig?.driver_radius || 20) + 10}`,
     );
     recommendations.push("Send push notification to offline drivers");
     recommendations.push("Consider activating surge incentives");
@@ -103,7 +126,7 @@ export async function getSupplyDemandBalance(params: SupplyDemandInput) {
     result_count: activeOrders + onlineDrivers,
   });
 
-  return wrapToolResponse(
+  const response = wrapToolResponse(
     {
       active_orders: activeOrders,
       online_drivers: onlineDrivers,
@@ -126,6 +149,8 @@ export async function getSupplyDemandBalance(params: SupplyDemandInput) {
       collection: "orders + drivers",
       execution_time_ms: executionTime,
       result_count: activeOrders,
-    }
+    },
   );
+  cacheSet(cacheKey, response, CACHE_TTL_MS);
+  return response;
 }

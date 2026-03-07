@@ -2,11 +2,22 @@ import { z } from "zod";
 import { Order } from "../../schemas/order.schema.js";
 import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
-import { ORDER_STATUS, ORDER_STATUS_LABELS } from "../../constants/order-status.js";
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_LABELS,
+} from "../../constants/order-status.js";
 
 export const needsAttentionSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
   unassigned_threshold_minutes: z
     .number()
     .default(5)
@@ -184,6 +195,6 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
       collection: "orders",
       execution_time_ms: executionTime,
       result_count: unassigned.length + pickupDelayed.length,
-    }
+    },
   );
 }

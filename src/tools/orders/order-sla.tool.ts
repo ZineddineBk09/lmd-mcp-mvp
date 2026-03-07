@@ -3,13 +3,25 @@ import { Order } from "../../schemas/order.schema.js";
 import { City } from "../../schemas/city.schema.js";
 import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
-import { ORDER_STATUS, ORDER_STATUS_LABELS, ACTIVE_ORDER_STATUSES } from "../../constants/order-status.js";
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_LABELS,
+  ACTIVE_ORDER_STATUSES,
+} from "../../constants/order-status.js";
 
 const DEFAULT_SLA_MINUTES = 25; // ORDER_ETA_FALLBACK_MINUTES
 
 export const orderSlaSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
   limit: z.number().default(50).describe("OPTIONAL. Max results (default 50)."),
 });
 
@@ -20,13 +32,15 @@ export async function getOrderSlaStatus(params: OrderSlaInput) {
 
   const cityConfigs = await City.find(
     params.country_code ? { country_code: params.country_code } : {},
-    { timer_config: 1, cityname: 1, state: 1 }
+    { timer_config: 1, cityname: 1, state: 1 },
   ).lean();
 
   const timerEnabled = cityConfigs.some((c) => c.timer_config?.isEnabled);
   const slaMinutes = timerEnabled
     ? Math.max(
-        ...cityConfigs.map((c) => c.timer_config?.storeTimer || DEFAULT_SLA_MINUTES)
+        ...cityConfigs.map(
+          (c) => c.timer_config?.storeTimer || DEFAULT_SLA_MINUTES,
+        ),
       )
     : DEFAULT_SLA_MINUTES;
 
@@ -154,6 +168,6 @@ export async function getOrderSlaStatus(params: OrderSlaInput) {
       collection: "orders",
       execution_time_ms: executionTime,
       result_count: orders.length,
-    }
+    },
   );
 }

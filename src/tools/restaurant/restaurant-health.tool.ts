@@ -7,14 +7,28 @@ import { logQuery } from "../../utils/query-logger.js";
 import { ORDER_STATUS } from "../../constants/order-status.js";
 
 export const restaurantHealthSchema = z.object({
-  country_code: z.string().optional().describe("OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries."),
-  city: z.string().optional().describe("OPTIONAL. City name. Omit for entire country."),
-  restaurant_id: z.string().optional().describe("OPTIONAL. Specific restaurant ObjectId."),
+  country_code: z
+    .string()
+    .optional()
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
+    ),
+  city: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. City name. Omit for entire country."),
+  restaurant_id: z
+    .string()
+    .optional()
+    .describe("OPTIONAL. Specific restaurant ObjectId."),
   since_hours: z
     .number()
     .default(24)
     .describe("OPTIONAL. Time window in hours (default 24)."),
-  top_n: z.number().default(10).describe("OPTIONAL. Number of top/bottom restaurants (default 10)."),
+  top_n: z
+    .number()
+    .default(10)
+    .describe("OPTIONAL. Number of top/bottom restaurants (default 10)."),
 });
 
 export type RestaurantHealthInput = z.infer<typeof restaurantHealthSchema>;
@@ -40,11 +54,7 @@ export async function getRestaurantHealth(params: RestaurantHealthInput) {
         total_orders: { $sum: 1 },
         accepted: {
           $sum: {
-            $cond: [
-              { $in: ["$status", [3, 5, 6, 7, 8, 16, 17]] },
-              1,
-              0,
-            ],
+            $cond: [{ $in: ["$status", [3, 5, 6, 7, 8, 16, 17]] }, 1, 0],
           },
         },
         rejected: {
@@ -79,7 +89,9 @@ export async function getRestaurantHealth(params: RestaurantHealthInput) {
             { $gt: ["$total_orders", 0] },
             {
               $round: [
-                { $multiply: [{ $divide: ["$accepted", "$total_orders"] }, 100] },
+                {
+                  $multiply: [{ $divide: ["$accepted", "$total_orders"] }, 100],
+                },
                 1,
               ],
             },
@@ -91,7 +103,9 @@ export async function getRestaurantHealth(params: RestaurantHealthInput) {
             { $gt: ["$total_orders", 0] },
             {
               $round: [
-                { $multiply: [{ $divide: ["$rejected", "$total_orders"] }, 100] },
+                {
+                  $multiply: [{ $divide: ["$rejected", "$total_orders"] }, 100],
+                },
                 1,
               ],
             },
@@ -109,18 +123,21 @@ export async function getRestaurantHealth(params: RestaurantHealthInput) {
   const restaurantIds = results.map((r) => r._id);
   const restaurants = await Restaurant.find(
     { _id: { $in: restaurantIds } },
-    { name: 1, restaurantAvailability: 1, store_type: 1, "address.city": 1 }
+    {
+      restaurantname: 1,
+      restaurantAvailability: 1,
+      store_type: 1,
+      "address.city": 1,
+    },
   ).lean();
 
-  const restaurantMap = new Map(
-    restaurants.map((r) => [r._id.toString(), r])
-  );
+  const restaurantMap = new Map(restaurants.map((r) => [r._id.toString(), r]));
 
   const enriched = results.map((r) => {
     const info = restaurantMap.get(r._id?.toString());
     return {
       restaurant_id: r._id?.toString(),
-      name: info?.name ?? "Unknown",
+      name: info?.restaurantname ?? "Unknown",
       city: info?.address?.city,
       store_type: info?.store_type,
       is_busy: info?.restaurantAvailability?.isBusy ?? false,
@@ -168,6 +185,6 @@ export async function getRestaurantHealth(params: RestaurantHealthInput) {
       collection: "orders + restaurant",
       execution_time_ms: executionTime,
       result_count: results.length,
-    }
+    },
   );
 }

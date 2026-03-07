@@ -16,7 +16,7 @@ export interface ToolResponse<T> {
 
 export function wrapToolResponse<T>(
   result: T,
-  debug: Omit<DebugInfo, "timestamp">
+  debug: Omit<DebugInfo, "timestamp">,
 ): ToolResponse<T> {
   let finalResult = result;
 
@@ -57,19 +57,17 @@ function compactResult(obj: Record<string, unknown>): Record<string, unknown> {
 export function formatMongoQuery(
   collection: string,
   method: string,
-  args: unknown[]
+  args: unknown[],
 ): string {
-  const serialized = args
-    .map((a) => JSON.stringify(a, replacer, 2))
-    .join(", ");
+  const serialized = args.map((a) => JSON.stringify(a, replacer)).join(", ");
   return `db.${collection}.${method}(${serialized})`;
 }
 
 export function formatAggregation(
   collection: string,
-  pipeline: unknown[]
+  pipeline: unknown[],
 ): string {
-  return `db.${collection}.aggregate(${JSON.stringify(pipeline, replacer, 2)})`;
+  return `db.${collection}.aggregate(${JSON.stringify(pipeline, replacer)})`;
 }
 
 function replacer(_key: string, value: unknown): unknown {

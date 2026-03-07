@@ -1,12 +1,13 @@
 import { z } from "zod";
 import mongoose from "mongoose";
 import { wrapToolResponse } from "../../utils/fact-check.js";
+import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
 
 export const describeCollectionSchema = z.object({
   collection: z
     .string()
     .describe(
-      "REQUIRED. MongoDB collection name. Examples: orders, restaurant, drivers, city, countrycurrency, cartv2, food, users, billing_cycles, offer, etc."
+      "REQUIRED. MongoDB collection name. Examples: orders, restaurant, drivers, city, countrycurrency, cartv2, food, users, billing_cycles, offer, etc.",
     ),
   sample_size: z
     .number()
@@ -16,6 +17,8 @@ export const describeCollectionSchema = z.object({
 
 export type DescribeCollectionInput = z.infer<typeof describeCollectionSchema>;
 
+const CACHE_TTL_MS = 600_000;
+
 const COLLECTION_REDIRECTS: Record<string, string> = {
   restaurants: "restaurant",
   cart: "cartv2",
@@ -24,7 +27,8 @@ const COLLECTION_REDIRECTS: Record<string, string> = {
   countries: "countrycurrency",
 };
 
-const SENSITIVE_PATTERN = /password|token|secret|credit_card|card_number|cvv|pin|otp|api_key|apikey/i;
+const SENSITIVE_PATTERN =
+  /password|token|secret|credit_card|card_number|cvv|pin|otp|api_key|apikey/i;
 
 const MAX_DEPTH = 3;
 const MAX_FIELDS = 80;
@@ -45,7 +49,9 @@ function isBsonLeaf(value: unknown): boolean {
     const ctor = (value as Record<string, unknown>).constructor;
     if (
       ctor &&
-      ["Binary", "Decimal128", "Long", "Timestamp", "Double", "Int32"].includes(ctor.name)
+      ["Binary", "Decimal128", "Long", "Timestamp", "Double", "Int32"].includes(
+        ctor.name,
+      )
     )
       return true;
   }
@@ -62,7 +68,7 @@ function extractFieldPaths(
   obj: Record<string, unknown>,
   prefix = "",
   depth = 0,
-  collected: Array<{ path: string; type: string; sample: string }> = []
+  collected: Array<{ path: string; type: string; sample: string }> = [],
 ): Array<{ path: string; type: string; sample: string }> {
   if (depth > MAX_DEPTH || collected.length >= MAX_FIELDS) return collected;
 
@@ -84,20 +90,41 @@ function extractFieldPaths(
         type: `Array<${itemType}>`,
         sample: `[${value.length} items]`,
       });
-      if (value.length > 0 && typeof value[0] === "object" && value[0] !== null && !isBsonLeaf(value[0])) {
-        extractFieldPaths(value[0] as Record<string, unknown>, `${fullPath}.0`, depth + 1, collected);
+      if (
+        value.length > 0 &&
+        typeof value[0] === "object" &&
+        value[0] !== null &&
+        !isBsonLeaf(value[0])
+      ) {
+        extractFieldPaths(
+          value[0] as Record<string, unknown>,
+          `${fullPath}.0`,
+          depth + 1,
+          collected,
+        );
       }
     } else if (isBsonLeaf(value)) {
       collected.push({
         path: fullPath,
-        type: isObjectId(value) ? "ObjectId" : ((value as Record<string, unknown>).constructor?.name ?? "Date"),
+        type: isObjectId(value)
+          ? "ObjectId"
+          : ((value as Record<string, unknown>).constructor?.name ?? "Date"),
         sample: truncateSample(value),
       });
     } else if (typeof value === "object") {
       collected.push({ path: fullPath, type: "Object", sample: "{...}" });
-      extractFieldPaths(value as Record<string, unknown>, fullPath, depth + 1, collected);
+      extractFieldPaths(
+        value as Record<string, unknown>,
+        fullPath,
+        depth + 1,
+        collected,
+      );
     } else {
-      collected.push({ path: fullPath, type: typeof value, sample: truncateSample(value) });
+      collected.push({
+        path: fullPath,
+        type: typeof value,
+        sample: truncateSample(value),
+      });
     }
   }
 
@@ -105,6 +132,14 @@ function extractFieldPaths(
 }
 
 export async function describeCollection(params: DescribeCollectionInput) {
+  const cacheKey = buildCacheKey(
+    "describe_collection",
+    params as Record<string, unknown>,
+  );
+  const cached =
+    cacheGet<Awaited<ReturnType<typeof wrapToolResponse>>>(cacheKey);
+  if (cached) return cached;
+
   const start = Date.now();
 
   let collectionName = params.collection;
@@ -117,7 +152,7 @@ export async function describeCollection(params: DescribeCollectionInput) {
   if (!db) {
     return wrapToolResponse(
       { error: "Database not connected" },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 }
+      { query: "N/A", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -133,7 +168,7 @@ export async function describeCollection(params: DescribeCollectionInput) {
       .toArray();
 
     if (samples.length === 0) {
-      return wrapToolResponse(
+      const response = wrapToolResponse(
         {
           collection: collectionName,
           estimated_count: estimatedCount,
@@ -144,8 +179,10 @@ export async function describeCollection(params: DescribeCollectionInput) {
           query: `db.${collectionName}.find().limit(${sampleSize})`,
           execution_time_ms: Date.now() - start,
           result_count: 0,
-        }
+        },
       );
+      cacheSet(cacheKey, response, CACHE_TTL_MS);
+      return response;
     }
 
     const fieldMap = new Map<string, { type: string; sample: string }>();
@@ -164,10 +201,12 @@ export async function describeCollection(params: DescribeCollectionInput) {
       compactFields.push(`${path} (${info.type}) = ${info.sample}`);
     }
 
-    const topLevelFields = Array.from(fieldMap.keys()).filter((f) => !f.includes("."));
+    const topLevelFields = Array.from(fieldMap.keys()).filter(
+      (f) => !f.includes("."),
+    );
     const truncated = fieldMap.size >= MAX_FIELDS;
 
-    return wrapToolResponse(
+    const response = wrapToolResponse(
       {
         collection: collectionName,
         estimated_count: estimatedCount,
@@ -181,8 +220,10 @@ export async function describeCollection(params: DescribeCollectionInput) {
         collection: collectionName,
         execution_time_ms: Date.now() - start,
         result_count: samples.length,
-      }
+      },
     );
+    cacheSet(cacheKey, response, CACHE_TTL_MS);
+    return response;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return wrapToolResponse(
@@ -191,7 +232,7 @@ export async function describeCollection(params: DescribeCollectionInput) {
         query: `db.${collectionName}.find().limit(${params.sample_size})`,
         execution_time_ms: Date.now() - start,
         result_count: 0,
-      }
+      },
     );
   }
 }

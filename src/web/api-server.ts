@@ -3,10 +3,18 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import express from "express";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions.js";
 import { connectMongoDB } from "../connections/mongodb.js";
 import { getOpenAITools, executeTool, getToolCount } from "./tool-registry.js";
+import {
+  saveConversation,
+  loadConversation,
+  listConversations,
+} from "./conversation-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,7 +61,7 @@ function detectProvider(): LLMProvider {
     };
   }
   throw new Error(
-    "No LLM API key found. Set CEREBRAS_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY in .env"
+    "No LLM API key found. Set CEREBRAS_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY in .env",
   );
 }
 
@@ -61,24 +69,35 @@ let SYSTEM_PROMPT = "";
 try {
   SYSTEM_PROMPT = readFileSync(
     resolve(__dirname, "..", "..", "system-prompt.txt"),
-    "utf-8"
+    "utf-8",
   );
 } catch {
-  SYSTEM_PROMPT = "You are Yassir LMD Ops Assistant. Answer questions using the available tools.";
+  SYSTEM_PROMPT =
+    "You are Yassir LMD Ops Assistant. Answer questions using the available tools.";
 }
 
-function buildSystemPrompt(settings: { country_code?: string; dev_mode?: boolean }): string {
+function buildSystemPrompt(settings: {
+  country_code?: string;
+  dev_mode?: boolean;
+}): string {
   let prompt = SYSTEM_PROMPT;
 
   if (settings.country_code && settings.country_code !== "ALL") {
-    const names: Record<string, string> = { DZ: "Algeria", MA: "Morocco", TN: "Tunisia", FR: "France", ZA: "South Africa", SN: "Senegal" };
+    const names: Record<string, string> = {
+      DZ: "Algeria",
+      MA: "Morocco",
+      TN: "Tunisia",
+      FR: "France",
+      ZA: "South Africa",
+      SN: "Senegal",
+    };
     prompt += `\n\nCONTEXT: The operator is focused on ${names[settings.country_code] || settings.country_code} (${settings.country_code}). Default to country_code="${settings.country_code}" for all queries unless they explicitly mention another country.`;
   }
 
   if (!settings.dev_mode) {
     prompt = prompt.replace(
       /6\. ALWAYS end your response with the MongoDB queries.*/,
-      "6. Do NOT include MongoDB queries in your response."
+      "6. Do NOT include MongoDB queries in your response.",
     );
   }
 
@@ -94,21 +113,141 @@ async function main() {
   console.log(`[web] LLM provider: ${provider.name} (${provider.model})`);
   console.log(`[web] Tools loaded: ${getToolCount()}`);
 
-  const openai = new OpenAI({ apiKey: provider.apiKey, baseURL: provider.baseURL });
+  const openai = new OpenAI({
+    apiKey: provider.apiKey,
+    baseURL: provider.baseURL,
+  });
   const tools = getOpenAITools();
 
   const app = express();
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:"],
+          connectSrc: ["'self'"],
+        },
+      },
+    }),
+  );
+  app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
   app.use(express.json({ limit: "1mb" }));
+
+  const apiLimiter = rateLimit({
+    windowMs: 60_000,
+    max: parseInt(process.env.RATE_LIMIT_RPM || "30", 10),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later." },
+  });
+  app.use("/api/", apiLimiter);
+
+  const API_KEY = process.env.API_KEY;
+  if (API_KEY) {
+    app.use("/api/chat", (req, res, next) => {
+      const provided =
+        (req.headers["x-api-key"] as string | undefined) ??
+        (req.query as Record<string, string>).api_key;
+      if (provided !== API_KEY) {
+        res
+          .status(401)
+          .json({ error: "Unauthorized. Provide a valid X-Api-Key header." });
+        return;
+      }
+      next();
+    });
+    console.log("[web] API key authentication enabled for /api/chat");
+  }
 
   const publicDir = resolve(__dirname, "..", "..", "public");
   app.use(express.static(publicDir));
 
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", provider: provider.name, model: provider.model, tools: getToolCount() });
+    res.json({
+      status: "ok",
+      provider: provider.name,
+      model: provider.model,
+      tools: getToolCount(),
+    });
+  });
+
+  app.get("/api/conversations", (_req, res) => {
+    res.json(listConversations());
+  });
+
+  app.get("/api/conversations/:id", (req, res) => {
+    const conv = loadConversation(req.params.id);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    res.json(conv);
+  });
+
+  app.post("/api/conversations/:id", (req, res) => {
+    const { messages, settings } = req.body as {
+      messages: Array<{ role: string; content: string }>;
+      settings?: Record<string, unknown>;
+    };
+    saveConversation(req.params.id, messages, settings);
+    res.json({ status: "saved" });
+  });
+
+  app.post("/api/export", async (req, res) => {
+    const { tool, params } = req.body as { tool: string; params: unknown };
+    if (!tool) {
+      res.status(400).json({ error: "tool is required" });
+      return;
+    }
+    try {
+      const { text: resultText } = await executeTool(tool, params ?? {});
+      const parsed = JSON.parse(resultText);
+
+      // Find the first array in the result to export
+      let dataToExport: Record<string, unknown>[] = [];
+      const findArray = (obj: unknown): Record<string, unknown>[] | null => {
+        if (Array.isArray(obj) && obj.length > 0 && typeof obj[0] === "object")
+          return obj;
+        if (obj && typeof obj === "object") {
+          for (const val of Object.values(obj as Record<string, unknown>)) {
+            const found = findArray(val);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      dataToExport = findArray(parsed) ?? [];
+
+      if (dataToExport.length === 0) {
+        res.status(400).json({ error: "No tabular data found in tool result" });
+        return;
+      }
+
+      const { jsonToCsv } = await import("./csv-export.js");
+      const csv = jsonToCsv(dataToExport);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${tool}_export.csv"`,
+      );
+      res.send(csv);
+    } catch (err) {
+      res
+        .status(500)
+        .json({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   app.post("/api/chat", async (req, res) => {
-    const { message, history = [], settings = {} } = req.body as {
+    const {
+      message,
+      history = [],
+      settings = {},
+    } = req.body as {
       message: string;
       history: ChatCompletionMessageParam[];
       settings: { country_code?: string; dev_mode?: boolean };
@@ -155,7 +294,10 @@ async function main() {
         const assistantMsg = choice.message;
         messages.push(assistantMsg);
 
-        if (choice.finish_reason === "tool_calls" || (assistantMsg.tool_calls?.length ?? 0) > 0) {
+        if (
+          choice.finish_reason === "tool_calls" ||
+          (assistantMsg.tool_calls?.length ?? 0) > 0
+        ) {
           const calls = assistantMsg.tool_calls ?? [];
           for (const call of calls) {
             if (call.type !== "function") continue;
@@ -170,18 +312,17 @@ async function main() {
             send("tool_call", { name: fnName, args: fnArgs });
             toolsUsed.push({ name: fnName, args: fnArgs });
 
-            const result = await executeTool(fnName, fnArgs);
+            const { text: toolText, debugQuery } = await executeTool(
+              fnName,
+              fnArgs,
+            );
 
-            try {
-              const parsed = JSON.parse(result);
-              if (parsed?._debug?.query) queriesCollected.push(parsed._debug.query);
-              if (parsed?.result?._debug?.query) queriesCollected.push(parsed.result._debug.query);
-            } catch { /* not json, skip */ }
+            if (debugQuery) queriesCollected.push(debugQuery);
 
             messages.push({
               role: "tool",
               tool_call_id: call.id,
-              content: result,
+              content: toolText,
             });
 
             send("tool_result", { name: fnName });
@@ -197,7 +338,9 @@ async function main() {
         return;
       }
 
-      send("content", { text: "I reached the maximum number of tool calls. Here is what I found so far." });
+      send("content", {
+        text: "I reached the maximum number of tool calls. Here is what I found so far.",
+      });
       send("meta", { tools_used: toolsUsed, queries: queriesCollected });
       send("done", {});
       res.end();
@@ -210,7 +353,9 @@ async function main() {
 
   const PORT = parseInt(process.env.WEB_PORT || "3737", 10);
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[web] Yassir LMD Ops Copilot running at http://localhost:${PORT}`);
+    console.log(
+      `[web] Yassir LMD Ops Copilot running at http://localhost:${PORT}`,
+    );
     console.log(`[web] Share on local network: http://<your-ip>:${PORT}`);
   });
 }

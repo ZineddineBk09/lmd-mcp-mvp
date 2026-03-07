@@ -9,13 +9,16 @@ export const lookupOrderSchema = z.object({
   order_id: z
     .string()
     .describe(
-      "REQUIRED. The order's MongoDB _id (24-char hex string). Use this to look up a single order."
+      "REQUIRED. The order's MongoDB _id (24-char hex string). Use this to look up a single order.",
     ),
 });
 
 export type LookupOrderInput = z.infer<typeof lookupOrderSchema>;
 
-function buildTimeline(history: Record<string, unknown>, createdAt: Date): Array<{ event: string; time: string; minutes_from_start: number }> {
+function buildTimeline(
+  history: Record<string, unknown>,
+  createdAt: Date,
+): Array<{ event: string; time: string; minutes_from_start: number }> {
   const entries: Array<{ event: string; time: Date; sortKey: number }> = [
     { event: "Order placed", time: createdAt, sortKey: 0 },
   ];
@@ -33,7 +36,11 @@ function buildTimeline(history: Record<string, unknown>, createdAt: Date): Array
 
   for (const [key, [label, sort]] of Object.entries(eventMap)) {
     if (history[key]) {
-      entries.push({ event: label, time: new Date(history[key] as Date), sortKey: sort });
+      entries.push({
+        event: label,
+        time: new Date(history[key] as Date),
+        sortKey: sort,
+      });
     }
   }
 
@@ -42,7 +49,9 @@ function buildTimeline(history: Record<string, unknown>, createdAt: Date): Array
     .map((e) => ({
       event: e.event,
       time: e.time.toISOString(),
-      minutes_from_start: Math.round((e.time.getTime() - createdAt.getTime()) / 60000),
+      minutes_from_start: Math.round(
+        (e.time.getTime() - createdAt.getTime()) / 60000,
+      ),
     }));
 }
 
@@ -54,8 +63,10 @@ export async function lookupOrder(params: LookupOrderInput) {
     objectId = new mongoose.Types.ObjectId(params.order_id);
   } catch {
     return wrapToolResponse(
-      { error: `Invalid order_id format: "${params.order_id}". Must be a 24-character hex string.` },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 }
+      {
+        error: `Invalid order_id format: "${params.order_id}". Must be a 24-character hex string.`,
+      },
+      { query: "N/A", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -63,7 +74,11 @@ export async function lookupOrder(params: LookupOrderInput) {
   if (!order) {
     return wrapToolResponse(
       { error: `Order not found: ${params.order_id}` },
-      { query: `db.orders.findById("${params.order_id}")`, execution_time_ms: Date.now() - start, result_count: 0 }
+      {
+        query: `db.orders.findById("${params.order_id}")`,
+        execution_time_ms: Date.now() - start,
+        result_count: 0,
+      },
     );
   }
 
@@ -81,15 +96,21 @@ export async function lookupOrder(params: LookupOrderInput) {
   const driverPhone = (driverEmbed.phone ?? {}) as Record<string, unknown>;
   const foods = (raw.foods ?? []) as Array<Record<string, unknown>>;
   const rejectedList = (raw.rejectedDriversList ?? []) as unknown[];
-  const deliveryAddr = (raw.delivery_address ?? raw.location ?? {}) as Record<string, unknown>;
+  const deliveryAddr = (raw.delivery_address ?? raw.location ?? {}) as Record<
+    string,
+    unknown
+  >;
   const createdAt = new Date(raw.createdAt as Date);
 
-  const statusLabel = ORDER_STATUS_LABELS[raw.status as number] ?? `Unknown(${raw.status})`;
+  const statusLabel =
+    ORDER_STATUS_LABELS[raw.status as number] ?? `Unknown(${raw.status})`;
   const timeline = buildTimeline(history, createdAt);
 
   const deliveredAt = history.food_delivered as Date | undefined;
   const deliveryMinutes = deliveredAt
-    ? Math.round((new Date(deliveredAt).getTime() - createdAt.getTime()) / 60000)
+    ? Math.round(
+        (new Date(deliveredAt).getTime() - createdAt.getTime()) / 60000,
+      )
     : null;
 
   const resolveI18nName = (i18n: unknown): string | null => {
@@ -125,20 +146,34 @@ export async function lookupOrder(params: LookupOrderInput) {
     is_scheduled: raw.is_scheduled ?? false,
 
     customer: {
-      user_id: user._id ? String(user._id) : (raw.user_id ? String(raw.user_id) : null),
+      user_id: user._id
+        ? String(user._id)
+        : raw.user_id
+          ? String(raw.user_id)
+          : null,
       name: user.username ?? null,
       last_name: user.last_name ?? null,
       email: user.email ?? null,
-      phone: userPhone.code && userPhone.number ? `${userPhone.code}${userPhone.number}` : null,
+      phone:
+        userPhone.code && userPhone.number
+          ? `${userPhone.code}${userPhone.number}`
+          : null,
       yassir_id: user.yassir_id ?? null,
       address: userAddr.fulladres ?? null,
     },
 
     restaurant: {
-      restaurant_id: rest._id ? String(rest._id) : (raw.restaurant_id ? String(raw.restaurant_id) : null),
+      restaurant_id: rest._id
+        ? String(rest._id)
+        : raw.restaurant_id
+          ? String(raw.restaurant_id)
+          : null,
       name: rest.restaurantname ?? null,
       store_type: rest.store_type ?? null,
-      phone: restPhone.code && restPhone.number ? `${restPhone.code}${restPhone.number}` : null,
+      phone:
+        restPhone.code && restPhone.number
+          ? `${restPhone.code}${restPhone.number}`
+          : null,
       city: rest.main_city ?? null,
     },
 
@@ -146,7 +181,10 @@ export async function lookupOrder(params: LookupOrderInput) {
       ? {
           driver_id: String(raw.driver_id),
           name: driverEmbed.username ?? null,
-          phone: driverPhone.code && driverPhone.number ? `${driverPhone.code}${driverPhone.number}` : null,
+          phone:
+            driverPhone.code && driverPhone.number
+              ? `${driverPhone.code}${driverPhone.number}`
+              : null,
         }
       : null,
 
@@ -188,13 +226,14 @@ export async function lookupOrder(params: LookupOrderInput) {
       rejected_drivers_count: rejectedList.length,
     },
 
-    cancellation: raw.cancellation_comment || raw.cancellationreason
-      ? {
-          reason: raw.cancellation_comment ?? raw.cancellationreason ?? null,
-          cancelled_role: raw.cancelled_role ?? null,
-          cancelled_name: raw.cancelled_name ?? null,
-        }
-      : null,
+    cancellation:
+      raw.cancellation_comment || raw.cancellationreason
+        ? {
+            reason: raw.cancellation_comment ?? raw.cancellationreason ?? null,
+            cancelled_role: raw.cancelled_role ?? null,
+            cancelled_name: raw.cancelled_name ?? null,
+          }
+        : null,
 
     timeline,
 
@@ -202,11 +241,15 @@ export async function lookupOrder(params: LookupOrderInput) {
       `Order ${String(raw._id).slice(-6)} — ${statusLabel}`,
       `${raw.country_code ?? "?"}/${raw.main_city ?? "?"}`,
       rest.restaurantname ? `Restaurant: ${rest.restaurantname}` : null,
-      user.username ? `Customer: ${user.username}${user.last_name ? " " + user.last_name : ""} (${userPhone.code && userPhone.number ? `${userPhone.code}${userPhone.number}` : "no phone"})` : null,
+      user.username
+        ? `Customer: ${user.username}${user.last_name ? " " + user.last_name : ""} (${userPhone.code && userPhone.number ? `${userPhone.code}${userPhone.number}` : "no phone"})`
+        : null,
       `${foods.length} item(s)`,
       amounts.grand_total != null ? `Total: ${amounts.grand_total}` : null,
       raw.payment_type ? `Payment: ${raw.payment_type}` : null,
-      rejectedList.length > 0 ? `${rejectedList.length} driver rejections` : null,
+      rejectedList.length > 0
+        ? `${rejectedList.length} driver rejections`
+        : null,
       deliveryMinutes ? `Delivered in ${deliveryMinutes} min` : null,
     ]
       .filter(Boolean)

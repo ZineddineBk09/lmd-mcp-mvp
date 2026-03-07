@@ -74,7 +74,7 @@ export const COLLECTION_SCHEMAS: Record<string, CollectionFieldGuide> = {
       updatedAt: "Date — last update timestamp",
     },
     common_filters: {
-      "active orders": '{ status: { $in: [1,3,5,6,17] } }',
+      "active orders": "{ status: { $in: [1,3,5,6,17] } }",
       "delivered orders": "{ status: 7 }",
       "cancelled orders": "{ status: { $in: [9,10,90] } }",
       "by country": '{ country_code: "DZ" }',
@@ -262,7 +262,8 @@ export const COLLECTION_SCHEMAS: Record<string, CollectionFieldGuide> = {
       "Country-level configurations: currency, feature flags, operational settings. One document per country.",
     key_fields: {
       _id: "ObjectId",
-      "country.code": "String — ISO country code (DZ, MA, TN, FR, SN, ZA) — UNIQUE",
+      "country.code":
+        "String — ISO country code (DZ, MA, TN, FR, SN, ZA) — UNIQUE",
       "country.name": "String — country name",
       "country.currency_code": "String — e.g. DZD, MAD, TND, XOF",
       "country.currency_symbol": "String — e.g. د.ج, DH, DT",
@@ -292,7 +293,8 @@ export const COLLECTION_SCHEMAS: Record<string, CollectionFieldGuide> = {
       "Algeria config": '{ "country.code": "DZ" }',
       "Morocco config": '{ "country.code": "MA" }',
       "all active": "{ status: 1 }",
-      "currency for country": '{ "country.code": "DZ" } → read country.currency_code',
+      "currency for country":
+        '{ "country.code": "DZ" } → read country.currency_code',
     },
     notes: [
       "IMPORTANT: Filter by 'country.code' NOT 'country_code'. The country field is a nested object.",

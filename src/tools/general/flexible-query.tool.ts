@@ -76,17 +76,17 @@ export const flexibleQuerySchema = z.object({
   collection: z
     .string()
     .describe(
-      "REQUIRED. MongoDB collection name. Examples: orders, restaurant, drivers, city, countrycurrency, cartv2, food, users, offer, etc."
+      "REQUIRED. MongoDB collection name. Examples: orders, restaurant, drivers, city, countrycurrency, cartv2, food, users, offer, etc.",
     ),
   action: z
     .enum(["count", "find", "distinct"])
     .describe(
-      "REQUIRED. 'count' returns document count, 'find' returns documents, 'distinct' returns unique values."
+      "REQUIRED. 'count' returns document count, 'find' returns documents, 'distinct' returns unique values.",
     ),
   filter: z
     .record(z.unknown())
     .describe(
-      "REQUIRED. MongoDB filter. Must have at least one condition. Field names are AUTO-CORRECTED if they don't match the actual document structure. Use describe_collection first to discover correct field names."
+      "REQUIRED. MongoDB filter. Must have at least one condition. Field names are AUTO-CORRECTED if they don't match the actual document structure. Use describe_collection first to discover correct field names.",
     ),
   distinct_field: z
     .string()
@@ -110,7 +110,7 @@ export type FlexibleQueryInput = z.infer<typeof flexibleQuerySchema>;
 
 function validateFilter(
   filter: Record<string, unknown>,
-  depth = 0
+  depth = 0,
 ): string | null {
   if (depth > MAX_FILTER_DEPTH)
     return "Filter too deeply nested (max 3 levels).";
@@ -127,7 +127,7 @@ function validateFilter(
     if (value && typeof value === "object" && !Array.isArray(value)) {
       const nested = validateFilter(
         value as Record<string, unknown>,
-        depth + 1
+        depth + 1,
       );
       if (nested) return nested;
     }
@@ -136,7 +136,7 @@ function validateFilter(
 }
 
 function sanitizeProjection(
-  projection?: Record<string, number>
+  projection?: Record<string, number>,
 ): Record<string, number> | undefined {
   if (!projection) return undefined;
   const safe: Record<string, number> = {};
@@ -171,7 +171,7 @@ function isBsonLeaf(value: unknown): boolean {
     if (
       constructor &&
       ["Binary", "Decimal128", "Long", "Timestamp", "Double", "Int32"].includes(
-        constructor.name
+        constructor.name,
       )
     )
       return true;
@@ -184,7 +184,7 @@ const MAX_RECURSION_DEPTH = 4;
 function extractFieldPaths(
   obj: Record<string, unknown>,
   prefix = "",
-  depth = 0
+  depth = 0,
 ): string[] {
   if (depth > MAX_RECURSION_DEPTH) return [];
   const paths: string[] = [];
@@ -207,8 +207,8 @@ function extractFieldPaths(
         ...extractFieldPaths(
           value as Record<string, unknown>,
           fullPath,
-          depth + 1
-        )
+          depth + 1,
+        ),
       );
     }
   }
@@ -221,7 +221,7 @@ function normalizeForMatch(s: string): string {
 
 function findBestFieldMatch(
   filterKey: string,
-  actualPaths: string[]
+  actualPaths: string[],
 ): string | null {
   if (filterKey.startsWith("$")) return null;
   if (actualPaths.includes(filterKey)) return filterKey;
@@ -232,7 +232,10 @@ function findBestFieldMatch(
     if (normalizeForMatch(path) === normalized) return path;
   }
 
-  const filterParts = filterKey.toLowerCase().replace(/[._-]/g, " ").split(/\s+/);
+  const filterParts = filterKey
+    .toLowerCase()
+    .replace(/[._-]/g, " ")
+    .split(/\s+/);
   let bestMatch: string | null = null;
   let bestScore = 0;
 
@@ -256,7 +259,7 @@ function findBestFieldMatch(
 
 function autoCorrectFilter(
   filter: Record<string, unknown>,
-  actualPaths: string[]
+  actualPaths: string[],
 ): { corrected: Record<string, unknown>; corrections: string[] } {
   const corrected: Record<string, unknown> = {};
   const corrections: string[] = [];
@@ -281,9 +284,7 @@ function autoCorrectFilter(
 
 const schemaCache = new Map<string, string[]>();
 
-async function discoverFields(
-  collectionName: string
-): Promise<string[]> {
+async function discoverFields(collectionName: string): Promise<string[]> {
   if (schemaCache.has(collectionName)) {
     return schemaCache.get(collectionName)!;
   }
@@ -318,7 +319,7 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
   if (BLOCKED_COLLECTIONS.has(params.collection)) {
     return wrapToolResponse(
       { error: `Collection '${params.collection}' is not accessible.` },
-      { query: "BLOCKED", execution_time_ms: 0, result_count: 0 }
+      { query: "BLOCKED", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -331,7 +332,7 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
       {
         error: `Collection '${params.collection}' is deprecated/empty. ${hint}`,
       },
-      { query: "BLOCKED", execution_time_ms: 0, result_count: 0 }
+      { query: "BLOCKED", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -339,7 +340,7 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
   if (filterError) {
     return wrapToolResponse(
       { error: filterError },
-      { query: "BLOCKED", execution_time_ms: 0, result_count: 0 }
+      { query: "BLOCKED", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -370,7 +371,10 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
           summary: `Found ${count} documents in ${params.collection} matching the filter.`,
           count,
           ...(corrections.length > 0
-            ? { auto_corrected_fields: corrections, corrected_filter: usedFilter }
+            ? {
+                auto_corrected_fields: corrections,
+                corrected_filter: usedFilter,
+              }
             : {}),
         };
         queryDesc = `db.${params.collection}.countDocuments(${JSON.stringify(usedFilter)})`;
@@ -391,7 +395,10 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
           total_matching: total,
           documents: docs,
           ...(corrections.length > 0
-            ? { auto_corrected_fields: corrections, corrected_filter: usedFilter }
+            ? {
+                auto_corrected_fields: corrections,
+                corrected_filter: usedFilter,
+              }
             : {}),
           ...(docs.length === 0 && actualFields.length > 0
             ? {
@@ -407,17 +414,17 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
         if (!params.distinct_field) {
           return wrapToolResponse(
             { error: "distinct_field is required when action is 'distinct'." },
-            { query: "BLOCKED", execution_time_ms: 0, result_count: 0 }
+            { query: "BLOCKED", execution_time_ms: 0, result_count: 0 },
           );
         }
         if (
           BLOCKED_FIELDS.some((bf) =>
-            params.distinct_field!.toLowerCase().includes(bf)
+            params.distinct_field!.toLowerCase().includes(bf),
           )
         ) {
           return wrapToolResponse(
             { error: `Field '${params.distinct_field}' is blocked.` },
-            { query: "BLOCKED", execution_time_ms: 0, result_count: 0 }
+            { query: "BLOCKED", execution_time_ms: 0, result_count: 0 },
           );
         }
 
@@ -438,7 +445,10 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
           unique_values: values.slice(0, MAX_RESULTS),
           total_unique: values.length,
           ...(corrections.length > 0
-            ? { auto_corrected_fields: corrections, corrected_filter: usedFilter }
+            ? {
+                auto_corrected_fields: corrections,
+                corrected_filter: usedFilter,
+              }
             : {}),
         };
         queryDesc = `db.${params.collection}.distinct('${distinctField}', ${JSON.stringify(usedFilter)})`;
@@ -458,7 +468,7 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
         query: `db.${params.collection}.${params.action}(${JSON.stringify(usedFilter)})`,
         execution_time_ms: Date.now() - start,
         result_count: 0,
-      }
+      },
     );
   }
 

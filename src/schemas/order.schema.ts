@@ -9,6 +9,8 @@ export interface IOrderHistory {
   order_time?: Date;
   restaurant_accepted?: Date;
   restaurant_rejected?: Date;
+  driver_confirmed?: Date;
+  driver_arrived?: Date;
 }
 
 export interface IOrder extends Document {
@@ -44,11 +46,13 @@ const orderSchema = new Schema(
       order_time: Date,
       restaurant_accepted: Date,
       restaurant_rejected: Date,
+      driver_confirmed: Date,
+      driver_arrived: Date,
     },
     ept: Number,
     estimated_preparation_time: { type: Number, default: 0 },
   },
-  { timestamps: true, collection: "orders", strict: false }
+  { timestamps: true, collection: "orders", strict: false },
 );
 
 export const Order =

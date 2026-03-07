@@ -9,19 +9,27 @@ export const lookupUserSchema = z.object({
   phone: z
     .string()
     .optional()
-    .describe("Phone number (e.g. +213666666666). Provide exactly one of phone, email, user_id, or name."),
+    .describe(
+      "Phone number (e.g. +213666666666). Provide exactly one of phone, email, user_id, or name.",
+    ),
   email: z
     .string()
     .optional()
-    .describe("Email address. Provide exactly one of phone, email, user_id, or name."),
+    .describe(
+      "Email address. Provide exactly one of phone, email, user_id, or name.",
+    ),
   user_id: z
     .string()
     .optional()
-    .describe("MongoDB _id of the user. Provide exactly one of phone, email, user_id, or name."),
+    .describe(
+      "MongoDB _id of the user. Provide exactly one of phone, email, user_id, or name.",
+    ),
   name: z
     .string()
     .optional()
-    .describe("User's name or username (partial match, case-insensitive). Provide exactly one of phone, email, user_id, or name."),
+    .describe(
+      "User's name or username (partial match, case-insensitive). Provide exactly one of phone, email, user_id, or name.",
+    ),
 });
 
 export type LookupUserInput = z.infer<typeof lookupUserSchema>;
@@ -32,7 +40,7 @@ export async function lookupUser(params: LookupUserInput) {
   if (!params.phone && !params.email && !params.user_id && !params.name) {
     return wrapToolResponse(
       { error: "Provide at least one of: phone, email, user_id, or name." },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 }
+      { query: "N/A", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -40,7 +48,7 @@ export async function lookupUser(params: LookupUserInput) {
   if (!db) {
     return wrapToolResponse(
       { error: "Database not connected" },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 }
+      { query: "N/A", execution_time_ms: 0, result_count: 0 },
     );
   }
 
@@ -55,7 +63,7 @@ export async function lookupUser(params: LookupUserInput) {
     } catch {
       return wrapToolResponse(
         { error: `Invalid user_id format: "${params.user_id}"` },
-        { query: "N/A", execution_time_ms: 0, result_count: 0 }
+        { query: "N/A", execution_time_ms: 0, result_count: 0 },
       );
     }
   } else if (params.phone) {
@@ -91,10 +99,15 @@ export async function lookupUser(params: LookupUserInput) {
       });
 
   if (!user) {
-    const searchBy = params.phone || params.email || params.user_id || params.name;
+    const searchBy =
+      params.phone || params.email || params.user_id || params.name;
     return wrapToolResponse(
       { error: `User not found for: ${searchBy}` },
-      { query: `db.users.findOne(${JSON.stringify(userFilter)})`, execution_time_ms: Date.now() - start, result_count: 0 }
+      {
+        query: `db.users.findOne(${JSON.stringify(userFilter)})`,
+        execution_time_ms: Date.now() - start,
+        result_count: 0,
+      },
     );
   }
 
@@ -103,7 +116,15 @@ export async function lookupUser(params: LookupUserInput) {
   const [recentOrders, orderStats, activeCart] = await Promise.all([
     Order.find(
       { $or: [{ user_id: userId }, { "user._id": userId }] },
-      { status: 1, createdAt: 1, main_city: 1, "billings.amount.grand_total": 1, restaurant_id: 1, "restaurant.restaurantname": 1, payment_type: 1 }
+      {
+        status: 1,
+        createdAt: 1,
+        main_city: 1,
+        "billings.amount.grand_total": 1,
+        restaurant_id: 1,
+        "restaurant.restaurantname": 1,
+        payment_type: 1,
+      },
     )
       .sort({ createdAt: -1 })
       .limit(10)
@@ -115,9 +136,13 @@ export async function lookupUser(params: LookupUserInput) {
         $group: {
           _id: null,
           total_orders: { $sum: 1 },
-          active: { $sum: { $cond: [{ $in: ["$status", [1, 3, 5, 6, 17]] }, 1, 0] } },
+          active: {
+            $sum: { $cond: [{ $in: ["$status", [1, 3, 5, 6, 17]] }, 1, 0] },
+          },
           delivered: { $sum: { $cond: [{ $eq: ["$status", 7] }, 1, 0] } },
-          cancelled: { $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] } },
+          cancelled: {
+            $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] },
+          },
           rejected: { $sum: { $cond: [{ $eq: ["$status", 2] }, 1, 0] } },
           timed_out: { $sum: { $cond: [{ $eq: ["$status", 11] }, 1, 0] } },
         },
@@ -126,11 +151,26 @@ export async function lookupUser(params: LookupUserInput) {
 
     db.collection("cartv2").findOne(
       { user_id: userId },
-      { projection: { cart_details: 1, total_ttc: 1, sub_total: 1, restaurant_id: 1, updatedAt: 1 } }
+      {
+        projection: {
+          cart_details: 1,
+          total_ttc: 1,
+          sub_total: 1,
+          restaurant_id: 1,
+          updatedAt: 1,
+        },
+      },
     ),
   ]);
 
-  const stats = orderStats[0] ?? { total_orders: 0, active: 0, delivered: 0, cancelled: 0, rejected: 0, timed_out: 0 };
+  const stats = orderStats[0] ?? {
+    total_orders: 0,
+    active: 0,
+    delivered: 0,
+    cancelled: 0,
+    rejected: 0,
+    timed_out: 0,
+  };
 
   const userPhone = (user.phone ?? {}) as Record<string, unknown>;
   const userAddress = (user.address ?? {}) as Record<string, unknown>;
@@ -141,7 +181,11 @@ export async function lookupUser(params: LookupUserInput) {
     first_name: user.first_name ?? null,
     last_name: user.last_name ?? null,
     full_name: user.full_name ?? null,
-    phone: user.full_phone ?? (userPhone.code && userPhone.number ? `${userPhone.code}${userPhone.number}` : null),
+    phone:
+      user.full_phone ??
+      (userPhone.code && userPhone.number
+        ? `${userPhone.code}${userPhone.number}`
+        : null),
     email: user.email ?? null,
     yassir_id: user.yassir_id ?? null,
     country_code: userAddress.country_code ?? null,
@@ -164,7 +208,8 @@ export async function lookupUser(params: LookupUserInput) {
       return {
         _id: String(o._id),
         status: o.status,
-        status_label: ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
+        status_label:
+          ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
         created_at: o.createdAt,
         city: o.main_city ?? null,
         restaurant: rest.restaurantname ?? null,
@@ -174,9 +219,13 @@ export async function lookupUser(params: LookupUserInput) {
     }),
     active_cart: activeCart
       ? {
-          items_count: Array.isArray(activeCart.cart_details) ? activeCart.cart_details.length : 0,
+          items_count: Array.isArray(activeCart.cart_details)
+            ? activeCart.cart_details.length
+            : 0,
           total: activeCart.total_ttc ?? activeCart.sub_total ?? null,
-          restaurant_id: activeCart.restaurant_id ? String(activeCart.restaurant_id) : null,
+          restaurant_id: activeCart.restaurant_id
+            ? String(activeCart.restaurant_id)
+            : null,
           updated_at: activeCart.updatedAt ?? null,
         }
       : null,

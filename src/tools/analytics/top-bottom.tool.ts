@@ -8,17 +8,27 @@ export const topBottomSchema = z.object({
   country_code: z
     .string()
     .optional()
-    .describe("OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries."),
+    .describe(
+      "OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.",
+    ),
   entity: z
     .enum(["city", "restaurant", "driver"])
     .describe("REQUIRED. What to rank: city, restaurant, or driver."),
   metric: z
-    .enum(["orders", "deliveries", "cancellations", "rejections", "avg_delivery_time"])
+    .enum([
+      "orders",
+      "deliveries",
+      "cancellations",
+      "rejections",
+      "avg_delivery_time",
+    ])
     .describe("REQUIRED. Metric to rank by."),
   direction: z
     .enum(["top", "bottom"])
     .default("top")
-    .describe("OPTIONAL. 'top' for highest, 'bottom' for lowest (default: top)."),
+    .describe(
+      "OPTIONAL. 'top' for highest, 'bottom' for lowest (default: top).",
+    ),
   top_n: z
     .number()
     .default(5)
@@ -42,17 +52,33 @@ function buildMetricStage(metric: string): Record<string, unknown> {
     case "deliveries":
       return { count: { $sum: { $cond: [{ $eq: ["$status", 7] }, 1, 0] } } };
     case "cancellations":
-      return { count: { $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] } } };
+      return {
+        count: { $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] } },
+      };
     case "rejections":
-      return { count: { $sum: { $size: { $ifNull: ["$rejectedDriversList", []] } } } };
+      return {
+        count: { $sum: { $size: { $ifNull: ["$rejectedDriversList", []] } } },
+      };
     case "avg_delivery_time":
       return {
         count: { $sum: 1 },
         avg_minutes: {
           $avg: {
             $cond: [
-              { $and: [{ $eq: ["$status", 7] }, { $ne: ["$order_history.food_delivered", null] }] },
-              { $divide: [{ $subtract: ["$order_history.food_delivered", "$createdAt"] }, 60000] },
+              {
+                $and: [
+                  { $eq: ["$status", 7] },
+                  { $ne: ["$order_history.food_delivered", null] },
+                ],
+              },
+              {
+                $divide: [
+                  {
+                    $subtract: ["$order_history.food_delivered", "$createdAt"],
+                  },
+                  60000,
+                ],
+              },
               null,
             ],
           },
@@ -75,7 +101,8 @@ export async function topBottom(params: TopBottomInput) {
 
   const groupField = ENTITY_GROUP_FIELD[params.entity];
   const metricAccumulator = buildMetricStage(params.metric);
-  const sortField = params.metric === "avg_delivery_time" ? "avg_minutes" : "count";
+  const sortField =
+    params.metric === "avg_delivery_time" ? "avg_minutes" : "count";
   const sortDir = params.direction === "top" ? -1 : 1;
 
   const pipeline = [
@@ -101,9 +128,11 @@ export async function topBottom(params: TopBottomInput) {
     if (db) {
       const restaurants = await db
         .collection("restaurant")
-        .find({ _id: { $in: ids } }, { projection: { name: 1 } })
+        .find({ _id: { $in: ids } }, { projection: { restaurantname: 1 } })
         .toArray();
-      const nameMap = new Map(restaurants.map((r) => [String(r._id), r.name]));
+      const nameMap = new Map(
+        restaurants.map((r) => [String(r._id), r.restaurantname]),
+      );
       enrichedResults = results.map((r) => ({
         ...r,
         name: nameMap.get(String(r._id)) ?? String(r._id),
@@ -115,9 +144,17 @@ export async function topBottom(params: TopBottomInput) {
     if (db) {
       const drivers = await db
         .collection("drivers")
-        .find({ _id: { $in: ids } }, { projection: { fullname: 1, username: 1 } })
+        .find(
+          { _id: { $in: ids } },
+          { projection: { first_name: 1, last_name: 1, username: 1 } },
+        )
         .toArray();
-      const nameMap = new Map(drivers.map((d) => [String(d._id), d.fullname ?? d.username ?? String(d._id)]));
+      const nameMap = new Map(
+        drivers.map((d: any) => [
+          String(d._id),
+          [d.username, d.last_name].filter(Boolean).join(" ") || String(d._id),
+        ]),
+      );
       enrichedResults = results.map((r) => ({
         ...r,
         name: nameMap.get(String(r._id)) ?? String(r._id),
@@ -129,8 +166,12 @@ export async function topBottom(params: TopBottomInput) {
     rank: i + 1,
     id: String(r._id),
     name: r.name ?? String(r._id),
-    value: params.metric === "avg_delivery_time" ? Math.round(r.avg_minutes ?? 0) : r.count,
-    metric_label: params.metric === "avg_delivery_time" ? "avg minutes" : params.metric,
+    value:
+      params.metric === "avg_delivery_time"
+        ? Math.round(r.avg_minutes ?? 0)
+        : r.count,
+    metric_label:
+      params.metric === "avg_delivery_time" ? "avg minutes" : params.metric,
   }));
 
   const result = {

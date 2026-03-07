@@ -7,10 +7,11 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0c0c1d;--surface:#151530;--surface2:#1c1c3a;--border:#2a2a50;
-  --primary:#7c5cfc;--primary-dim:#5a3fd6;--accent:#00d4aa;
+  --bg:#0f0f1e;--surface:#161630;--surface2:#1e1e3d;--border:#2d2d55;
+  --primary:#541ab0;--primary-dim:#3d1280;--primary-light:#7b3fd4;
+  --accent:#FB2576;--accent-light:#ff4d8f;
   --text:#e8e8f0;--text-dim:#8888a8;--text-muted:#555570;
-  --danger:#ff4757;--warn:#ffa502;--success:#2ed573;
+  --danger:#ef4444;--warn:#ffa502;--success:#10b981;
   --radius:12px;--font:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
 html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden}
@@ -21,11 +22,13 @@ a{color:var(--primary)}
 .sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:transform .3s}
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 
-/* Sidebar */
-.logo{padding:20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
-.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff}
-.logo h1{font-size:15px;font-weight:600;line-height:1.3}
-.logo span{font-size:11px;color:var(--text-dim);font-weight:400}
+/* Sidebar brand header */
+.brand-header{background:linear-gradient(135deg,var(--primary),var(--primary-dim));padding:20px;border-bottom:1px solid var(--border)}
+.brand-header .logo-row{display:flex;align-items:center;gap:12px}
+.brand-header .logo-img{height:28px;width:auto;filter:brightness(1)}
+.brand-header .console-badge{display:inline-block;margin-top:8px;padding:3px 10px;background:rgba(255,255,255,.12);border-radius:4px;font-size:10px;font-weight:600;letter-spacing:1.5px;color:rgba(255,255,255,.85);text-transform:uppercase}
+.logo h1{font-size:15px;font-weight:600;line-height:1.3;color:#fff}
+.logo span{font-size:11px;color:rgba(255,255,255,.6);font-weight:400}
 .sidebar-section{padding:16px 20px}
 .sidebar-section h3{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:12px}
 .setting-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
@@ -69,7 +72,7 @@ select:focus{border-color:var(--primary)}
 .tool-indicator{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-dim);align-self:flex-start;animation:fadeIn .2s ease}
 .tool-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--warn);animation:pulse 1s infinite}
 .tool-indicator.done .dot{background:var(--success);animation:none}
-.tool-name{color:var(--accent);font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:11px}
+.tool-name{color:var(--primary-light);font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:11px}
 
 /* Dev queries panel */
 .queries-panel{margin-top:8px;padding:10px 14px;background:#0a0a18;border:1px solid var(--border);border-radius:8px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--text-muted);line-height:1.8;word-break:break-all}
@@ -78,7 +81,7 @@ select:focus{border-color:var(--primary)}
 /* Quick actions */
 .quick-actions{padding:8px 24px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);background:var(--surface)}
 .quick-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:12px;cursor:pointer;transition:.2s;white-space:nowrap}
-.quick-btn:hover{border-color:var(--primary);color:var(--text);background:rgba(124,92,252,.1)}
+.quick-btn:hover{border-color:var(--primary-light);color:var(--text);background:rgba(84,26,176,.15)}
 
 /* Input area */
 .chat-input-wrap{padding:16px 24px;border-top:1px solid var(--border);background:var(--surface)}
@@ -94,11 +97,11 @@ select:focus{border-color:var(--primary)}
 /* Welcome screen */
 .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center}
 .welcome-icon{font-size:48px;margin-bottom:8px}
-.welcome h2{font-size:22px;font-weight:600;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.welcome h2{font-size:22px;font-weight:600;background:linear-gradient(135deg,var(--primary-light),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .welcome p{color:var(--text-dim);max-width:480px;line-height:1.6;font-size:14px}
 .welcome-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px;max-width:500px;width:100%}
 .welcome-card{padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:left;transition:.2s}
-.welcome-card:hover{border-color:var(--primary);transform:translateY(-2px)}
+.welcome-card:hover{border-color:var(--primary-light);transform:translateY(-2px);box-shadow:0 4px 16px rgba(84,26,176,.2)}
 .welcome-card .emoji{font-size:20px;margin-bottom:6px}
 .welcome-card .title{font-size:13px;font-weight:500;margin-bottom:3px}
 .welcome-card .desc{font-size:11px;color:var(--text-muted);line-height:1.4}
@@ -113,10 +116,10 @@ select:focus{border-color:var(--primary)}
 .msg-bubble h1,.msg-bubble h2,.msg-bubble h3{margin:10px 0 6px;font-size:15px}
 .msg-bubble p{margin:4px 0}
 .msg-bubble ul,.msg-bubble ol{padding-left:20px;margin:6px 0}
-.msg-bubble code{background:rgba(124,92,252,.15);padding:2px 6px;border-radius:4px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:12px}
+.msg-bubble code{background:rgba(84,26,176,.2);padding:2px 6px;border-radius:4px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:12px}
 .msg-bubble pre{background:#0a0a18;padding:12px;border-radius:8px;overflow-x:auto;margin:8px 0}
 .msg-bubble pre code{background:none;padding:0}
-.msg-bubble strong{color:var(--accent)}
+.msg-bubble strong{color:var(--accent-light)}
 .msg-bubble table{border-collapse:collapse;margin:8px 0;width:100%;font-size:13px}
 .msg-bubble th,.msg-bubble td{border:1px solid var(--border);padding:6px 10px;text-align:left}
 .msg-bubble th{background:var(--surface);font-weight:500}
@@ -136,17 +139,17 @@ select:focus{border-color:var(--primary)}
 @keyframes bounce{to{transform:translateY(-6px)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 <div class="app">
-  <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+  <div class="sidebar-overlay" id="overlay"></div>
   <aside class="sidebar" id="sidebar">
-    <div class="logo">
-      <div class="logo-icon">Y</div>
-      <div>
-        <h1>LMD Ops Copilot</h1>
-        <span>AI-powered operations</span>
+    <div class="brand-header">
+      <div class="logo-row">
+        <img src="/yassir-logo.svg" alt="Yassir" class="logo-img">
       </div>
+      <div class="console-badge">AI Ops Console</div>
     </div>
 
     <div class="sidebar-section">
@@ -182,18 +185,18 @@ select:focus{border-color:var(--primary)}
     </div>
 
     <div class="sidebar-section">
-      <button onclick="clearChat()" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:13px">Clear Conversation</button>
+      <button id="clearBtn" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:13px">Clear Conversation</button>
     </div>
   </aside>
 
   <div class="main">
     <div class="chat-header">
       <div style="display:flex;align-items:center;gap:12px">
-        <button class="btn-icon" onclick="toggleSidebar()" id="menuBtn">&#9776;</button>
+        <button class="btn-icon" id="menuBtn">&#9776;</button>
         <h2>Operations Assistant</h2>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn-icon" onclick="clearChat()" title="New chat">&#x2795;</button>
+        <button class="btn-icon" id="newChatBtn" title="New chat">&#x2795;</button>
       </div>
     </div>
 
@@ -210,8 +213,8 @@ select:focus{border-color:var(--primary)}
 
     <div class="chat-input-wrap">
       <div class="chat-input-row">
-        <textarea class="chat-input" id="chatInput" placeholder="Ask about orders, drivers, restaurants..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
+        <textarea class="chat-input" id="chatInput" placeholder="Ask about orders, drivers, restaurants..." rows="1"></textarea>
+        <button class="send-btn" id="sendBtn">&#10148;</button>
       </div>
       <div class="chat-hint">Press Enter to send, Shift+Enter for new line</div>
     </div>
@@ -260,6 +263,14 @@ function init() {
     card.onclick = () => sendPrompt(c.prompt);
     wGrid.appendChild(card);
   });
+
+  $("sendBtn").addEventListener("click", sendMessage);
+  $("chatInput").addEventListener("keydown", handleKey);
+  $("chatInput").addEventListener("input", function() { autoResize(this); });
+  $("overlay").addEventListener("click", toggleSidebar);
+  $("menuBtn").addEventListener("click", toggleSidebar);
+  $("clearBtn").addEventListener("click", clearChat);
+  $("newChatBtn").addEventListener("click", clearChat);
 
   checkHealth();
 }
@@ -473,21 +484,17 @@ async function sendMessage() {
   $("chatInput").focus();
 }
 
+marked.setOptions({ breaks: true, gfm: true });
+
 function renderMarkdown(text) {
   if (!text) return "";
-  let html = escapeHtml(text);
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-  html = html.replace(/\n{2,}/g, '</p><p>');
-  html = html.replace(/\n/g, '<br>');
-  return '<p>' + html + '</p>';
+  try {
+    return marked.parse(text);
+  } catch {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
 }
 
 function escapeHtml(str) {
