@@ -286,7 +286,8 @@ async function main() {
     }, SERVER_TIMEOUT_MS);
 
     const send = (event: string, data: unknown) => {
-      if (!aborted) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (!aborted)
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
     try {
@@ -368,10 +369,21 @@ async function main() {
         const text = assistantMsg.content ?? "";
         const elapsed = Date.now() - requestStart;
         const totalTokens = totalPromptTokens + totalCompletionTokens;
-        console.log(`[llm] ${message.slice(0, 60)} | ${totalPromptTokens}+${totalCompletionTokens}=${totalTokens} tokens | ${toolsUsed.length} tools | ${elapsed}ms`);
+        console.log(
+          `[llm] ${message.slice(0, 60)} | ${totalPromptTokens}+${totalCompletionTokens}=${totalTokens} tokens | ${toolsUsed.length} tools | ${elapsed}ms`,
+        );
 
         send("content", { text });
-        send("meta", { tools_used: toolsUsed, queries: queriesCollected, tokens: { prompt: totalPromptTokens, completion: totalCompletionTokens, total: totalTokens }, elapsed_ms: elapsed });
+        send("meta", {
+          tools_used: toolsUsed,
+          queries: queriesCollected,
+          tokens: {
+            prompt: totalPromptTokens,
+            completion: totalCompletionTokens,
+            total: totalTokens,
+          },
+          elapsed_ms: elapsed,
+        });
         send("done", {});
         clearTimeout(timeout);
         res.end();
@@ -384,8 +396,19 @@ async function main() {
         });
         const elapsed = Date.now() - requestStart;
         const totalTokens = totalPromptTokens + totalCompletionTokens;
-        console.log(`[llm] ${message.slice(0, 60)} | ${totalPromptTokens}+${totalCompletionTokens}=${totalTokens} tokens (max rounds) | ${toolsUsed.length} tools | ${elapsed}ms`);
-        send("meta", { tools_used: toolsUsed, queries: queriesCollected, tokens: { prompt: totalPromptTokens, completion: totalCompletionTokens, total: totalTokens }, elapsed_ms: elapsed });
+        console.log(
+          `[llm] ${message.slice(0, 60)} | ${totalPromptTokens}+${totalCompletionTokens}=${totalTokens} tokens (max rounds) | ${toolsUsed.length} tools | ${elapsed}ms`,
+        );
+        send("meta", {
+          tools_used: toolsUsed,
+          queries: queriesCollected,
+          tokens: {
+            prompt: totalPromptTokens,
+            completion: totalCompletionTokens,
+            total: totalTokens,
+          },
+          elapsed_ms: elapsed,
+        });
         send("done", {});
       }
       clearTimeout(timeout);

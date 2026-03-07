@@ -103,11 +103,7 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
 function computeDelta(current: number, previous: number) {
   const delta = current - previous;
   const deltaPct =
-    previous > 0
-      ? Math.round((delta / previous) * 100)
-      : current > 0
-        ? 100
-        : 0;
+    previous > 0 ? Math.round((delta / previous) * 100) : current > 0 ? 100 : 0;
   const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
   return { delta, delta_pct: deltaPct, trend };
 }
@@ -133,17 +129,32 @@ export async function comparePeriods(params: ComparePeriodsInput) {
   if (params.group_by_country) {
     const [currentAgg, previousAgg] = await Promise.all([
       Order.aggregate([
-        { $match: { ...baseFilter, createdAt: { $gte: ranges.current.start, $lt: ranges.current.end } } },
+        {
+          $match: {
+            ...baseFilter,
+            createdAt: { $gte: ranges.current.start, $lt: ranges.current.end },
+          },
+        },
         { $group: { _id: "$country_code", count: { $sum: 1 } } },
       ]).exec(),
       Order.aggregate([
-        { $match: { ...baseFilter, createdAt: { $gte: ranges.previous.start, $lt: ranges.previous.end } } },
+        {
+          $match: {
+            ...baseFilter,
+            createdAt: {
+              $gte: ranges.previous.start,
+              $lt: ranges.previous.end,
+            },
+          },
+        },
         { $group: { _id: "$country_code", count: { $sum: 1 } } },
       ]).exec(),
     ]);
 
     const KNOWN_COUNTRIES = ["DZ", "MA", "TN", "FR", "ZA", "SN"];
-    const prevMap = new Map(previousAgg.map((r: { _id: string; count: number }) => [r._id, r.count]));
+    const prevMap = new Map(
+      previousAgg.map((r: { _id: string; count: number }) => [r._id, r.count]),
+    );
     const countries = new Set([
       ...KNOWN_COUNTRIES,
       ...currentAgg.map((r: { _id: string }) => r._id),
@@ -151,9 +162,15 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     ]);
 
     const breakdown = [...countries].sort().map((cc) => {
-      const cur = currentAgg.find((r: { _id: string }) => r._id === cc)?.count ?? 0;
+      const cur =
+        currentAgg.find((r: { _id: string }) => r._id === cc)?.count ?? 0;
       const prev = prevMap.get(cc) ?? 0;
-      return { country_code: cc, current: cur, previous: prev, ...computeDelta(cur, prev) };
+      return {
+        country_code: cc,
+        current: cur,
+        previous: prev,
+        ...computeDelta(cur, prev),
+      };
     });
 
     const totalCur = breakdown.reduce((s, r) => s + r.current, 0);
@@ -165,18 +182,38 @@ export async function comparePeriods(params: ComparePeriodsInput) {
       current_label: currentLabel,
       previous_label: previousLabel,
       breakdown,
-      total: { current: totalCur, previous: totalPrev, ...computeDelta(totalCur, totalPrev) },
+      total: {
+        current: totalCur,
+        previous: totalPrev,
+        ...computeDelta(totalCur, totalPrev),
+      },
       summary: `${params.metric} by country (${currentLabel} vs ${previousLabel}): ${breakdown.map((r) => `${r.country_code}: ${r.current} vs ${r.previous} (${r.delta >= 0 ? "+" : ""}${r.delta_pct}%)`).join(", ")}.`,
     };
 
     const currentPipeline = [
-      { $match: { ...baseFilter, createdAt: { $gte: ranges.current.start, $lt: ranges.current.end } } },
+      {
+        $match: {
+          ...baseFilter,
+          createdAt: { $gte: ranges.current.start, $lt: ranges.current.end },
+        },
+      },
       { $group: { _id: "$country_code", count: { $sum: 1 } } },
     ];
     const queryStr = `Current: ${formatMongoQuery("orders", "aggregate", [currentPipeline])}\nPrevious: same pipeline with previous date range`;
     const executionTime = Date.now() - start;
-    logQuery({ tool: "compare_periods", params, query: queryStr, execution_time_ms: executionTime, result_count: breakdown.length });
-    return wrapToolResponse(result, { query: queryStr, collection: "orders", execution_time_ms: executionTime, result_count: breakdown.length });
+    logQuery({
+      tool: "compare_periods",
+      params,
+      query: queryStr,
+      execution_time_ms: executionTime,
+      result_count: breakdown.length,
+    });
+    return wrapToolResponse(result, {
+      query: queryStr,
+      collection: "orders",
+      execution_time_ms: executionTime,
+      result_count: breakdown.length,
+    });
   }
 
   const [currentCount, previousCount] = await Promise.all([
@@ -190,7 +227,11 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     }),
   ]);
 
-  const { delta, delta_pct: deltaPct, trend } = computeDelta(currentCount, previousCount);
+  const {
+    delta,
+    delta_pct: deltaPct,
+    trend,
+  } = computeDelta(currentCount, previousCount);
 
   const result = {
     metric: params.metric,
@@ -212,8 +253,14 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     summary: `${params.metric} ${trend === "up" ? "increased" : trend === "down" ? "decreased" : "unchanged"}: ${currentCount} ${currentLabel} vs ${previousCount} ${previousLabel} (${delta >= 0 ? "+" : ""}${deltaPct}%) in ${params.country_code ?? "all"}${params.city ? `/${params.city}` : ""}.`,
   };
 
-  const currentFilter = { ...baseFilter, createdAt: { $gte: ranges.current.start, $lt: ranges.current.end } };
-  const previousFilter = { ...baseFilter, createdAt: { $gte: ranges.previous.start, $lt: ranges.previous.end } };
+  const currentFilter = {
+    ...baseFilter,
+    createdAt: { $gte: ranges.current.start, $lt: ranges.current.end },
+  };
+  const previousFilter = {
+    ...baseFilter,
+    createdAt: { $gte: ranges.previous.start, $lt: ranges.previous.end },
+  };
   const queryStr = `Current: ${formatMongoQuery("orders", "countDocuments", [currentFilter])}\nPrevious: ${formatMongoQuery("orders", "countDocuments", [previousFilter])}`;
 
   const executionTime = Date.now() - start;

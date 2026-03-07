@@ -74,7 +74,12 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
   const results = await Order.aggregate(pipeline as never[]);
 
   const KNOWN_COUNTRIES = ["DZ", "MA", "TN", "FR", "ZA", "SN"];
-  const ZERO_ROW = { total_revenue: 0, total_delivery_fees: 0, avg_basket_size: 0, order_count: 0 };
+  const ZERO_ROW = {
+    total_revenue: 0,
+    total_delivery_fees: 0,
+    avg_basket_size: 0,
+    order_count: 0,
+  };
 
   let rows = results.map((r) => ({
     dimension: r._id ?? "total",
@@ -89,7 +94,9 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
     for (const cc of KNOWN_COUNTRIES) {
       if (!seen.has(cc)) rows.push({ dimension: cc, ...ZERO_ROW });
     }
-    rows = rows.sort((a, b) => String(a.dimension).localeCompare(String(b.dimension)));
+    rows = rows.sort((a, b) =>
+      String(a.dimension).localeCompare(String(b.dimension)),
+    );
   }
 
   const totals = rows.reduce(
