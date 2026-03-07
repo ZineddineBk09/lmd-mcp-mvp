@@ -70,6 +70,8 @@ select:focus{border-color:var(--primary)}
 .msg.user .msg-meta{text-align:right}
 
 /* Tool call indicators */
+.chart-container{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0;max-width:500px}
+.chart-container canvas{width:100%!important;max-height:320px}
 .tool-indicator{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-dim);align-self:flex-start;animation:fadeIn .2s ease}
 .tool-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--warn);animation:pulse 1s infinite}
 .tool-indicator.done .dot{background:var(--success);animation:none}
@@ -150,6 +152,7 @@ select:focus{border-color:var(--primary)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <div class="app">
@@ -447,6 +450,7 @@ function addMessage(role, content) {
   bubble.className = "msg-bubble";
   if (role === "assistant") {
     bubble.innerHTML = renderMarkdown(content);
+    renderCharts(bubble);
   } else {
     bubble.textContent = content;
   }
@@ -633,15 +637,64 @@ async function sendMessage() {
 
 marked.setOptions({ breaks: true, gfm: true });
 
+let chartCounter = 0;
+const CHART_COLORS = ["#7b3fd4","#FB2576","#10b981","#ffa502","#3b82f6","#f472b6","#06b6d4","#eab308","#a855f7","#ec4899"];
+
+function tryParseChart(code) {
+  try {
+    const obj = JSON.parse(code);
+    if (obj && obj.type && obj.data && obj.data.labels && obj.data.datasets) return obj;
+  } catch {}
+  return null;
+}
+
 function renderMarkdown(text) {
   if (!text) return "";
   try {
-    return marked.parse(text);
+    let html = marked.parse(text);
+    html = html.replace(/<pre><code class="language-chart">([\s\S]*?)<\/code><\/pre>/g, (_m, code) => {
+      const decoded = code.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+      const cfg = tryParseChart(decoded);
+      if (!cfg) return _m;
+      const id = "chart-" + (++chartCounter);
+      return `<div class="chart-container"><canvas id="${id}" data-chart='${JSON.stringify(cfg)}'></canvas></div>`;
+    });
+    return html;
   } catch {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
+}
+
+function renderCharts(container) {
+  container.querySelectorAll("canvas[data-chart]").forEach(canvas => {
+    try {
+      const cfg = JSON.parse(canvas.dataset.chart);
+      cfg.data.datasets.forEach((ds, i) => {
+        if (!ds.backgroundColor) {
+          if (cfg.type === "pie" || cfg.type === "doughnut") {
+            ds.backgroundColor = cfg.data.labels.map((_,j) => CHART_COLORS[j % CHART_COLORS.length]);
+          } else {
+            ds.backgroundColor = CHART_COLORS[i % CHART_COLORS.length] + "cc";
+            ds.borderColor = CHART_COLORS[i % CHART_COLORS.length];
+            ds.borderWidth = 2;
+          }
+        }
+      });
+      cfg.options = cfg.options || {};
+      cfg.options.responsive = true;
+      cfg.options.maintainAspectRatio = false;
+      cfg.options.plugins = cfg.options.plugins || {};
+      cfg.options.plugins.legend = { labels: { color: "#e8e8f0" } };
+      cfg.options.scales = cfg.options.scales || {};
+      if (cfg.type !== "pie" && cfg.type !== "doughnut") {
+        cfg.options.scales.x = { ticks: { color: "#8888a8" }, grid: { color: "#2d2d55" } };
+        cfg.options.scales.y = { ticks: { color: "#8888a8" }, grid: { color: "#2d2d55" } };
+      }
+      new Chart(canvas, cfg);
+    } catch (e) { console.warn("Chart render failed:", e); }
+  });
 }
 
 function escapeHtml(str) {
