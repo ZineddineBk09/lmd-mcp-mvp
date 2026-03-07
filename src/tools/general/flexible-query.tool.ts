@@ -70,7 +70,86 @@ const BLOCKED_FIELDS = [
   "access_token",
   "api_key",
   "apikey",
+  "client_secret",
+  "auth_code",
+  "approval_code",
+  "transaction_id",
+  "payment_order_id",
+  "action_id",
+  "device_token",
 ];
+
+const COLLECTION_REDACTED_KEYS: Record<string, string[]> = {
+  cart_payment_transactions: [
+    "MICRO_SERVICE_TRANSACTION_ID",
+    "YASSIR_ACTION_ID",
+    "PAYMENT_ORDER_ID",
+    "CLIENT_SECRET_KEY",
+    "AUTH_CODE",
+    "AUTH_CODE_DESC",
+    "APPROVAL_CODE",
+    "END_MESSAGES",
+    "TRACKER",
+    "INTERNAL_ERROR_MESSAGE",
+    "REMOTE_ERROR_MESSAGE",
+  ],
+  courier_payments: [
+    "MICRO_SERVICE_TRANSACTION_ID",
+    "YASSIR_ACTION_ID",
+    "PAYMENT_ORDER_ID",
+    "CLIENT_SECRET_KEY",
+    "AUTH_CODE",
+    "AUTH_CODE_DESC",
+    "APPROVAL_CODE",
+  ],
+  payment_gateway: [
+    "MICRO_SERVICE_TRANSACTION_ID",
+    "CLIENT_SECRET_KEY",
+    "AUTH_CODE",
+    "APPROVAL_CODE",
+  ],
+  temp_payment: [
+    "MICRO_SERVICE_TRANSACTION_ID",
+    "CLIENT_SECRET_KEY",
+    "AUTH_CODE",
+    "APPROVAL_CODE",
+  ],
+};
+
+function stripBlockedFields(
+  doc: Record<string, unknown>,
+  collection: string,
+): Record<string, unknown> {
+  const collectionKeys = COLLECTION_REDACTED_KEYS[collection] ?? [];
+
+  function isBlocked(key: string): boolean {
+    const lower = key.toLowerCase();
+    if (BLOCKED_FIELDS.some((bf) => lower.includes(bf))) return true;
+    if (collectionKeys.includes(key)) return true;
+    return false;
+  }
+
+  function recurse(obj: unknown, depth: number): unknown {
+    if (depth > 6 || obj == null) return obj;
+    if (Array.isArray(obj)) return obj.map((item) => recurse(item, depth + 1));
+    if (typeof obj === "object" && !isObjectId(obj) && !(obj instanceof Date)) {
+      const cleaned: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(
+        obj as Record<string, unknown>,
+      )) {
+        if (isBlocked(key)) {
+          cleaned[key] = "[REDACTED]";
+        } else {
+          cleaned[key] = recurse(val, depth + 1);
+        }
+      }
+      return cleaned;
+    }
+    return obj;
+  }
+
+  return recurse(doc, 0) as Record<string, unknown>;
+}
 
 export const flexibleQuerySchema = z.object({
   collection: z
@@ -385,9 +464,15 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
         if (projection) cursor.project(projection);
         cursor.sort((params.sort || { _id: -1 }) as Record<string, 1 | -1>);
         cursor.limit(cappedLimit);
-        const docs = await cursor.toArray();
+        const rawDocs = await cursor.toArray();
         const total = await col.countDocuments(usedFilter);
         resultCount = total;
+        const docs = rawDocs.map((d) =>
+          stripBlockedFields(
+            d as Record<string, unknown>,
+            params.collection,
+          ),
+        );
 
         result = {
           summary: `Found ${total} documents in ${params.collection}. Returned ${docs.length}.`,
@@ -417,10 +502,11 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
             { query: "BLOCKED", execution_time_ms: 0, result_count: 0 },
           );
         }
+        const dfLower = params.distinct_field!.toLowerCase();
+        const collKeys = COLLECTION_REDACTED_KEYS[params.collection] ?? [];
         if (
-          BLOCKED_FIELDS.some((bf) =>
-            params.distinct_field!.toLowerCase().includes(bf),
-          )
+          BLOCKED_FIELDS.some((bf) => dfLower.includes(bf)) ||
+          collKeys.includes(params.distinct_field!)
         ) {
           return wrapToolResponse(
             { error: `Field '${params.distinct_field}' is blocked.` },
