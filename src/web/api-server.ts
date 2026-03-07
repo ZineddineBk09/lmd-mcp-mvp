@@ -54,6 +54,14 @@ function detectProvider(): LLMProvider {
       model: process.env.OPENAI_MODEL || "llama-3.3-70b-versatile",
     };
   }
+  if (process.env.QWEN_API_KEY) {
+    return {
+      name: "Qwen (DashScope)",
+      apiKey: process.env.QWEN_API_KEY,
+      baseURL: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      model: process.env.QWEN_MODEL || "qwen-plus",
+    };
+  }
   if (process.env.OPENAI_API_KEY) {
     return {
       name: "OpenAI",
@@ -63,7 +71,7 @@ function detectProvider(): LLMProvider {
     };
   }
   throw new Error(
-    "No LLM API key found. Set CEREBRAS_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY in .env",
+    "No LLM API key found. Set CEREBRAS_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, QWEN_API_KEY, or OPENAI_API_KEY in .env",
   );
 }
 
