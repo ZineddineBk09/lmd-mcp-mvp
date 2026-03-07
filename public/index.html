@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yassir LMD Ops Copilot</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c1d;--surface:#151530;--surface2:#1c1c3a;--border:#2a2a50;
+  --primary:#7c5cfc;--primary-dim:#5a3fd6;--accent:#00d4aa;
+  --text:#e8e8f0;--text-dim:#8888a8;--text-muted:#555570;
+  --danger:#ff4757;--warn:#ffa502;--success:#2ed573;
+  --radius:12px;--font:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden}
+a{color:var(--primary)}
+
+/* Layout */
+.app{display:flex;height:100vh}
+.sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:transform .3s}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+/* Sidebar */
+.logo{padding:20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff}
+.logo h1{font-size:15px;font-weight:600;line-height:1.3}
+.logo span{font-size:11px;color:var(--text-dim);font-weight:400}
+.sidebar-section{padding:16px 20px}
+.sidebar-section h3{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:12px}
+.setting-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.setting-row label{font-size:13px;color:var(--text-dim)}
+select{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;outline:none}
+select:focus{border-color:var(--primary)}
+
+/* Toggle switch */
+.toggle{position:relative;width:44px;height:24px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:.3s}
+.toggle .slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.3s}
+.toggle input:checked+.slider{background:var(--primary)}
+.toggle input:checked+.slider::before{transform:translateX(20px)}
+
+/* Provider badge */
+.provider-badge{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-radius:8px;margin-top:8px}
+.provider-dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.provider-dot.offline{background:var(--danger)}
+.provider-info{font-size:12px;color:var(--text-dim)}
+.provider-info strong{color:var(--text);font-weight:500}
+
+/* Chat area */
+.chat-header{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface)}
+.chat-header h2{font-size:15px;font-weight:500}
+.btn-icon{background:none;border:1px solid var(--border);color:var(--text-dim);width:36px;height:36px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:.2s}
+.btn-icon:hover{border-color:var(--primary);color:var(--primary)}
+.chat-messages{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
+
+/* Messages */
+.msg{max-width:85%;animation:fadeIn .3s ease}
+.msg.user{align-self:flex-end}
+.msg.assistant{align-self:flex-start}
+.msg-bubble{padding:12px 16px;border-radius:var(--radius);font-size:14px;line-height:1.6;word-wrap:break-word}
+.msg.user .msg-bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.msg.assistant .msg-bubble{background:var(--surface2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-meta{font-size:11px;color:var(--text-muted);margin-top:4px;padding:0 4px}
+.msg.user .msg-meta{text-align:right}
+
+/* Tool call indicators */
+.tool-indicator{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-dim);align-self:flex-start;animation:fadeIn .2s ease}
+.tool-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--warn);animation:pulse 1s infinite}
+.tool-indicator.done .dot{background:var(--success);animation:none}
+.tool-name{color:var(--accent);font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:11px}
+
+/* Dev queries panel */
+.queries-panel{margin-top:8px;padding:10px 14px;background:#0a0a18;border:1px solid var(--border);border-radius:8px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--text-muted);line-height:1.8;word-break:break-all}
+.queries-panel summary{cursor:pointer;color:var(--text-dim);font-family:var(--font);font-size:12px;user-select:none}
+
+/* Quick actions */
+.quick-actions{padding:8px 24px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);background:var(--surface)}
+.quick-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:12px;cursor:pointer;transition:.2s;white-space:nowrap}
+.quick-btn:hover{border-color:var(--primary);color:var(--text);background:rgba(124,92,252,.1)}
+
+/* Input area */
+.chat-input-wrap{padding:16px 24px;border-top:1px solid var(--border);background:var(--surface)}
+.chat-input-row{display:flex;gap:10px;align-items:flex-end}
+.chat-input{flex:1;resize:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;min-height:46px;max-height:150px;outline:none;transition:border .2s}
+.chat-input:focus{border-color:var(--primary)}
+.chat-input::placeholder{color:var(--text-muted)}
+.send-btn{width:46px;height:46px;border-radius:var(--radius);border:none;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:.2s;flex-shrink:0}
+.send-btn:hover{background:var(--primary-dim)}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+.chat-hint{font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px}
+
+/* Welcome screen */
+.welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center}
+.welcome-icon{font-size:48px;margin-bottom:8px}
+.welcome h2{font-size:22px;font-weight:600;background:linear-gradient(135deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.welcome p{color:var(--text-dim);max-width:480px;line-height:1.6;font-size:14px}
+.welcome-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px;max-width:500px;width:100%}
+.welcome-card{padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:left;transition:.2s}
+.welcome-card:hover{border-color:var(--primary);transform:translateY(-2px)}
+.welcome-card .emoji{font-size:20px;margin-bottom:6px}
+.welcome-card .title{font-size:13px;font-weight:500;margin-bottom:3px}
+.welcome-card .desc{font-size:11px;color:var(--text-muted);line-height:1.4}
+
+/* Typing indicator */
+.typing{display:flex;gap:4px;padding:12px 16px;align-self:flex-start}
+.typing span{width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:bounce .6s infinite alternate}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+
+/* Markdown in messages */
+.msg-bubble h1,.msg-bubble h2,.msg-bubble h3{margin:10px 0 6px;font-size:15px}
+.msg-bubble p{margin:4px 0}
+.msg-bubble ul,.msg-bubble ol{padding-left:20px;margin:6px 0}
+.msg-bubble code{background:rgba(124,92,252,.15);padding:2px 6px;border-radius:4px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:12px}
+.msg-bubble pre{background:#0a0a18;padding:12px;border-radius:8px;overflow-x:auto;margin:8px 0}
+.msg-bubble pre code{background:none;padding:0}
+.msg-bubble strong{color:var(--accent)}
+.msg-bubble table{border-collapse:collapse;margin:8px 0;width:100%;font-size:13px}
+.msg-bubble th,.msg-bubble td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+.msg-bubble th{background:var(--surface);font-weight:500}
+
+/* Responsive */
+@media(max-width:768px){
+  .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:100;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:none}
+  .sidebar-overlay.visible{display:block}
+  .welcome-grid{grid-template-columns:1fr}
+  .msg{max-width:95%}
+}
+
+/* Animations */
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bounce{to{transform:translateY(-6px)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">
+      <div class="logo-icon">Y</div>
+      <div>
+        <h1>LMD Ops Copilot</h1>
+        <span>AI-powered operations</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Country Focus</h3>
+      <select id="countrySelect" style="width:100%">
+        <option value="ALL">All Countries</option>
+        <option value="DZ">Algeria (DZ)</option>
+        <option value="MA">Morocco (MA)</option>
+        <option value="TN">Tunisia (TN)</option>
+        <option value="CI">Ivory Coast (CI)</option>
+      </select>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Settings</h3>
+      <div class="setting-row">
+        <label>Dev Mode (show queries)</label>
+        <label class="toggle"><input type="checkbox" id="devMode"><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:auto">
+      <h3>AI Provider</h3>
+      <div class="provider-badge">
+        <div class="provider-dot" id="providerDot"></div>
+        <div class="provider-info">
+          <strong id="providerName">Connecting...</strong><br>
+          <span id="providerModel"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <button onclick="clearChat()" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);border-radius:8px;cursor:pointer;font-size:13px">Clear Conversation</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="chat-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn-icon" onclick="toggleSidebar()" id="menuBtn">&#9776;</button>
+        <h2>Operations Assistant</h2>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-icon" onclick="clearChat()" title="New chat">&#x2795;</button>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-icon">&#x1F916;</div>
+        <h2>How can I help with operations today?</h2>
+        <p>Ask me anything about orders, drivers, restaurants, or fleet status. I have direct access to the Yassir LMD database.</p>
+        <div class="welcome-grid" id="welcomeGrid"></div>
+      </div>
+    </div>
+
+    <div class="quick-actions" id="quickActions"></div>
+
+    <div class="chat-input-wrap">
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chatInput" placeholder="Ask about orders, drivers, restaurants..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
+      </div>
+      <div class="chat-hint">Press Enter to send, Shift+Enter for new line</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const QUICK_ACTIONS = [
+  { label: "Active Orders", prompt: "How many active orders do we have right now?" },
+  { label: "Fleet Status", prompt: "Give me the current fleet status" },
+  { label: "Needs Attention", prompt: "Which orders need urgent attention?" },
+  { label: "Shift Report", prompt: "Generate a shift report for today" },
+  { label: "Supply & Demand", prompt: "What's the supply and demand balance?" },
+  { label: "Anomalies", prompt: "Are there any anomalies right now?" },
+  { label: "Top Restaurants", prompt: "Top 5 restaurants by orders today" },
+  { label: "Today vs Yesterday", prompt: "Compare today's orders vs yesterday" },
+];
+
+const WELCOME_CARDS = [
+  { emoji: "\u{1F4E6}", title: "Order Intelligence", desc: "Track orders, investigate issues, SLA breaches", prompt: "How many active orders right now?" },
+  { emoji: "\u{1F697}", title: "Fleet Overview", desc: "Driver status, ghost detection, capacity", prompt: "What's the current fleet status?" },
+  { emoji: "\u{1F37D}", title: "Restaurant Health", desc: "Performance, rejections, auto-busy risks", prompt: "Show me restaurant health overview" },
+  { emoji: "\u{1F4CA}", title: "Analytics & Trends", desc: "Compare periods, rankings, anomaly detection", prompt: "Compare today vs yesterday" },
+];
+
+let chatHistory = [];
+let isStreaming = false;
+
+function $(id) { return document.getElementById(id); }
+
+function init() {
+  const qDiv = $("quickActions");
+  QUICK_ACTIONS.forEach(a => {
+    const btn = document.createElement("button");
+    btn.className = "quick-btn";
+    btn.textContent = a.label;
+    btn.onclick = () => sendPrompt(a.prompt);
+    qDiv.appendChild(btn);
+  });
+
+  const wGrid = $("welcomeGrid");
+  WELCOME_CARDS.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "welcome-card";
+    card.innerHTML = `<div class="emoji">${c.emoji}</div><div class="title">${c.title}</div><div class="desc">${c.desc}</div>`;
+    card.onclick = () => sendPrompt(c.prompt);
+    wGrid.appendChild(card);
+  });
+
+  checkHealth();
+}
+
+async function checkHealth() {
+  try {
+    const res = await fetch("/api/health");
+    const data = await res.json();
+    $("providerName").textContent = data.provider;
+    $("providerModel").textContent = data.model;
+    $("providerDot").className = "provider-dot";
+  } catch {
+    $("providerName").textContent = "Offline";
+    $("providerModel").textContent = "Server not reachable";
+    $("providerDot").className = "provider-dot offline";
+  }
+}
+
+function toggleSidebar() {
+  $("sidebar").classList.toggle("open");
+  $("overlay").classList.toggle("visible");
+}
+
+function clearChat() {
+  chatHistory = [];
+  $("chatMessages").innerHTML = "";
+  $("chatMessages").appendChild(createWelcome());
+}
+
+function createWelcome() {
+  const div = document.createElement("div");
+  div.className = "welcome";
+  div.id = "welcomeScreen";
+  div.innerHTML = `
+    <div class="welcome-icon">&#x1F916;</div>
+    <h2>How can I help with operations today?</h2>
+    <p>Ask me anything about orders, drivers, restaurants, or fleet status.</p>
+    <div class="welcome-grid" id="welcomeGrid"></div>`;
+  const wGrid = div.querySelector("#welcomeGrid");
+  WELCOME_CARDS.forEach(c => {
+    const card = document.createElement("div");
+    card.className = "welcome-card";
+    card.innerHTML = `<div class="emoji">${c.emoji}</div><div class="title">${c.title}</div><div class="desc">${c.desc}</div>`;
+    card.onclick = () => sendPrompt(c.prompt);
+    wGrid.appendChild(card);
+  });
+  return div;
+}
+
+function sendPrompt(text) {
+  $("chatInput").value = text;
+  sendMessage();
+}
+
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 150) + "px";
+}
+
+function handleKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function addMessage(role, content) {
+  const welcome = $("welcomeScreen");
+  if (welcome) welcome.remove();
+
+  const div = document.createElement("div");
+  div.className = `msg ${role}`;
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+  if (role === "assistant") {
+    bubble.innerHTML = renderMarkdown(content);
+  } else {
+    bubble.textContent = content;
+  }
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+  meta.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  div.appendChild(bubble);
+  div.appendChild(meta);
+  $("chatMessages").appendChild(div);
+  scrollDown();
+  return bubble;
+}
+
+function addToolIndicator(name, isDone) {
+  const div = document.createElement("div");
+  div.className = "tool-indicator" + (isDone ? " done" : "");
+  div.innerHTML = `<div class="dot"></div><span>${isDone ? "Used" : "Calling"} <span class="tool-name">${name}</span></span>`;
+  $("chatMessages").appendChild(div);
+  scrollDown();
+  return div;
+}
+
+function addQueries(queries) {
+  if (!queries.length) return;
+  const details = document.createElement("details");
+  details.className = "queries-panel";
+  details.innerHTML = `<summary>MongoDB Queries (${queries.length})</summary>${queries.map(q => `<div style="margin-top:6px">${escapeHtml(q)}</div>`).join("")}`;
+  $("chatMessages").appendChild(details);
+  scrollDown();
+}
+
+function scrollDown() {
+  const el = $("chatMessages");
+  el.scrollTop = el.scrollHeight;
+}
+
+function showTyping() {
+  const div = document.createElement("div");
+  div.className = "typing";
+  div.id = "typingIndicator";
+  div.innerHTML = "<span></span><span></span><span></span>";
+  $("chatMessages").appendChild(div);
+  scrollDown();
+}
+
+function hideTyping() {
+  const el = $("typingIndicator");
+  if (el) el.remove();
+}
+
+async function sendMessage() {
+  const input = $("chatInput");
+  const text = input.value.trim();
+  if (!text || isStreaming) return;
+
+  isStreaming = true;
+  $("sendBtn").disabled = true;
+  input.value = "";
+  input.style.height = "auto";
+
+  addMessage("user", text);
+  chatHistory.push({ role: "user", content: text });
+  showTyping();
+
+  const settings = {
+    country_code: $("countrySelect").value,
+    dev_mode: $("devMode").checked,
+  };
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, history: chatHistory.slice(-20), settings }),
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let assistantText = "";
+    let toolIndicators = new Map();
+    let queries = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          var eventType = line.slice(7).trim();
+        } else if (line.startsWith("data: ") && eventType) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === "tool_call") {
+              hideTyping();
+              const ind = addToolIndicator(data.name, false);
+              toolIndicators.set(data.name, ind);
+              showTyping();
+            } else if (eventType === "tool_result") {
+              const ind = toolIndicators.get(data.name);
+              if (ind) { ind.className = "tool-indicator done"; ind.querySelector(".dot").style.animation = "none"; }
+            } else if (eventType === "content") {
+              hideTyping();
+              assistantText = data.text;
+            } else if (eventType === "meta") {
+              queries = data.queries || [];
+            } else if (eventType === "error") {
+              hideTyping();
+              assistantText = "Error: " + data.message;
+            }
+          } catch {}
+          eventType = null;
+        }
+      }
+    }
+
+    if (assistantText) {
+      addMessage("assistant", assistantText);
+      chatHistory.push({ role: "assistant", content: assistantText });
+    }
+    if (settings.dev_mode && queries.length) {
+      addQueries(queries);
+    }
+  } catch (err) {
+    hideTyping();
+    addMessage("assistant", "Connection error: " + err.message);
+  }
+
+  isStreaming = false;
+  $("sendBtn").disabled = false;
+  $("chatInput").focus();
+}
+
+function renderMarkdown(text) {
+  if (!text) return "";
+  let html = escapeHtml(text);
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  html = html.replace(/\n{2,}/g, '</p><p>');
+  html = html.replace(/\n/g, '<br>');
+  return '<p>' + html + '</p>';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "lmd-ops-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Yassir LMD Ops Command Center",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "web": "node dist/web/api-server.js",
+    "inspect": "node --inspect dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "mongoose": "^6.13.8",
+    "openai": "^6.27.0",
+    "zod": "^3.25.0",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
