@@ -23,7 +23,7 @@ IMPORTANT: When the user does NOT specify a country, do NOT assume one. Omit cou
 City is ALWAYS optional. Omit it to query broadly.
 
 Collection names and key filter fields:
-- "orders" → status (Number), country_code, main_city, user_id, restaurant_id, driver_id, "user.username", "user.phone.number", createdAt
+- "orders" → status (Number), country_code, main_city, user_id, restaurant_id, driver_id, "user.username", "user.phone.number", createdAt, "billings.amount.grand_total" (total price), "billings.amount.delivery_amount", "billings.epay.method" (payment method). WARNING: there is NO "total_price" field — always use "billings.amount.grand_total" for order totals.
 - "users" → email, username (first name), full_phone, "phone.number", status, yassir_id
 - "drivers" (with s!) → username, email, "phone.number", main_city, "address.country_code", currentStatus (0=offline,1=online,2=busy), status
 - "restaurant" (singular!) → restaurantname, email, main_city, "address.country_code", availability, status, store_type

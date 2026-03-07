@@ -220,9 +220,9 @@ function sanitizeProjection(
   if (!projection) return undefined;
   const safe: Record<string, number> = {};
   for (const [key, val] of Object.entries(projection)) {
-    if (!BLOCKED_FIELDS.some((bf) => key.toLowerCase().includes(bf))) {
-      safe[key] = val;
-    }
+    if (BLOCKED_FIELDS.some((bf) => key.toLowerCase().includes(bf))) continue;
+    const resolved = FIELD_ALIASES[key.toLowerCase()] ?? key;
+    safe[resolved] = val;
   }
   return Object.keys(safe).length > 0 ? safe : undefined;
 }
@@ -294,6 +294,27 @@ function extractFieldPaths(
   return paths;
 }
 
+const FIELD_ALIASES: Record<string, string> = {
+  total_price: "billings.amount.grand_total",
+  price: "billings.amount.grand_total",
+  total: "billings.amount.grand_total",
+  grand_total: "billings.amount.grand_total",
+  delivery_fee: "billings.amount.delivery_amount",
+  delivery_amount: "billings.amount.delivery_amount",
+  service_charge: "billings.amount.service_charge",
+  payment_method: "billings.epay.method",
+  coupon_discount: "billings.amount.coupon_discount",
+  offer_discount: "billings.amount.offer_discount",
+  restaurant_name: "restaurant.restaurantname",
+  driver_name: "driver.username",
+  user_name: "user.username",
+  customer_name: "user.username",
+  customer_phone: "user.phone.number",
+  user_phone: "user.phone.number",
+  driver_phone: "driver.phone.number",
+  name: "restaurantname",
+};
+
 function normalizeForMatch(s: string): string {
   return s.toLowerCase().replace(/[._-]/g, "");
 }
@@ -304,6 +325,9 @@ function findBestFieldMatch(
 ): string | null {
   if (filterKey.startsWith("$")) return null;
   if (actualPaths.includes(filterKey)) return filterKey;
+
+  const alias = FIELD_ALIASES[filterKey.toLowerCase()];
+  if (alias && actualPaths.includes(alias)) return alias;
 
   const normalized = normalizeForMatch(filterKey);
 
