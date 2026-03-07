@@ -73,13 +73,24 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
 
   const results = await Order.aggregate(pipeline as never[]);
 
-  const rows = results.map((r) => ({
+  const KNOWN_COUNTRIES = ["DZ", "MA", "TN", "FR", "ZA", "SN"];
+  const ZERO_ROW = { total_revenue: 0, total_delivery_fees: 0, avg_basket_size: 0, order_count: 0 };
+
+  let rows = results.map((r) => ({
     dimension: r._id ?? "total",
     total_revenue: Math.round((r.total_revenue ?? 0) * 100) / 100,
     total_delivery_fees: Math.round((r.total_delivery_fees ?? 0) * 100) / 100,
     avg_basket_size: Math.round((r.avg_basket_size ?? 0) * 100) / 100,
     order_count: r.order_count ?? 0,
   }));
+
+  if (params.group_by === "country" && !params.country_code) {
+    const seen = new Set(rows.map((r) => r.dimension));
+    for (const cc of KNOWN_COUNTRIES) {
+      if (!seen.has(cc)) rows.push({ dimension: cc, ...ZERO_ROW });
+    }
+    rows = rows.sort((a, b) => String(a.dimension).localeCompare(String(b.dimension)));
+  }
 
   const totals = rows.reduce(
     (acc, r) => ({

@@ -164,7 +164,16 @@ async function main() {
   }
 
   const publicDir = resolve(__dirname, "..", "..", "public");
-  app.use(express.static(publicDir));
+  app.use(
+    express.static(publicDir, {
+      etag: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-store");
+        }
+      },
+    }),
+  );
 
   app.get("/api/health", (_req, res) => {
     res.json({
@@ -263,8 +272,18 @@ async function main() {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
+    let aborted = false;
+    req.on("close", () => {
+      aborted = true;
+    });
+
+    const SERVER_TIMEOUT_MS = 120_000;
+    const timeout = setTimeout(() => {
+      aborted = true;
+    }, SERVER_TIMEOUT_MS);
+
     const send = (event: string, data: unknown) => {
-      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (!aborted) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
     try {
@@ -280,6 +299,8 @@ async function main() {
       const queriesCollected: string[] = [];
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        if (aborted) break;
+
         const response = await openai.chat.completions.create({
           model: provider.model,
           messages,
@@ -287,6 +308,8 @@ async function main() {
           temperature: 0.1,
           max_tokens: 2048,
         });
+
+        if (aborted) break;
 
         const choice = response.choices[0];
         if (!choice) break;
@@ -300,6 +323,7 @@ async function main() {
         ) {
           const calls = assistantMsg.tool_calls ?? [];
           for (const call of calls) {
+            if (aborted) break;
             if (call.type !== "function") continue;
             const fnName = call.function.name;
             let fnArgs: unknown;
@@ -334,20 +358,27 @@ async function main() {
         send("content", { text });
         send("meta", { tools_used: toolsUsed, queries: queriesCollected });
         send("done", {});
+        clearTimeout(timeout);
         res.end();
         return;
       }
 
-      send("content", {
-        text: "I reached the maximum number of tool calls. Here is what I found so far.",
-      });
-      send("meta", { tools_used: toolsUsed, queries: queriesCollected });
-      send("done", {});
+      if (!aborted) {
+        send("content", {
+          text: "I reached the maximum number of tool calls. Here is what I found so far.",
+        });
+        send("meta", { tools_used: toolsUsed, queries: queriesCollected });
+        send("done", {});
+      }
+      clearTimeout(timeout);
       res.end();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      send("error", { message: msg });
-      res.end();
+      clearTimeout(timeout);
+      if (!aborted) {
+        const msg = err instanceof Error ? err.message : String(err);
+        send("error", { message: msg });
+        res.end();
+      }
     }
   });
 

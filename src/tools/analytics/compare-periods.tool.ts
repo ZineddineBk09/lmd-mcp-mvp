@@ -142,8 +142,10 @@ export async function comparePeriods(params: ComparePeriodsInput) {
       ]).exec(),
     ]);
 
+    const KNOWN_COUNTRIES = ["DZ", "MA", "TN", "FR", "ZA", "SN"];
     const prevMap = new Map(previousAgg.map((r: { _id: string; count: number }) => [r._id, r.count]));
     const countries = new Set([
+      ...KNOWN_COUNTRIES,
       ...currentAgg.map((r: { _id: string }) => r._id),
       ...previousAgg.map((r: { _id: string }) => r._id),
     ]);

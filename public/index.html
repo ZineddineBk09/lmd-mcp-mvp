@@ -93,6 +93,7 @@ select:focus{border-color:var(--primary)}
 .send-btn{width:46px;height:46px;border-radius:var(--radius);border:none;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:.2s;flex-shrink:0}
 .send-btn:hover{background:var(--primary-dim)}
 .send-btn:disabled{opacity:.4;cursor:not-allowed}
+.send-btn.stop{background:var(--accent);opacity:1!important;cursor:pointer!important}
 .chat-hint{font-size:11px;color:var(--text-muted);text-align:center;margin-top:8px}
 
 /* Welcome screen */
@@ -332,6 +333,10 @@ function autoResize(el) {
 }
 
 function handleKey(e) {
+  if (e.key === "Escape" && isStreaming) {
+    abortRequest();
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
@@ -398,13 +403,42 @@ function hideTyping() {
   if (el) el.remove();
 }
 
+let activeAbort = null;
+const REQUEST_TIMEOUT_MS = 90_000;
+
+function setStopMode(on) {
+  const btn = $("sendBtn");
+  if (on) {
+    btn.disabled = false;
+    btn.classList.add("stop");
+    btn.innerHTML = "&#9632;";
+    btn.title = "Stop request";
+  } else {
+    btn.classList.remove("stop");
+    btn.innerHTML = "&#10148;";
+    btn.title = "";
+  }
+}
+
+function abortRequest() {
+  if (activeAbort) {
+    activeAbort.abort();
+    activeAbort = null;
+  }
+}
+
 async function sendMessage() {
   const input = $("chatInput");
   const text = input.value.trim();
-  if (!text || isStreaming) return;
+
+  if (isStreaming) {
+    abortRequest();
+    return;
+  }
+  if (!text) return;
 
   isStreaming = true;
-  $("sendBtn").disabled = true;
+  setStopMode(true);
   input.value = "";
   input.style.height = "auto";
 
@@ -417,12 +451,21 @@ async function sendMessage() {
     dev_mode: $("devMode").checked,
   };
 
+  const controller = new AbortController();
+  activeAbort = controller;
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, history: chatHistory.slice(-20), settings }),
+      signal: controller.signal,
     });
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -477,12 +520,19 @@ async function sendMessage() {
     }
   } catch (err) {
     hideTyping();
-    addMessage("assistant", "Connection error: " + err.message);
+    if (err.name === "AbortError") {
+      addMessage("assistant", "Request stopped.");
+    } else {
+      addMessage("assistant", "Connection error: " + err.message);
+    }
+  } finally {
+    clearTimeout(timeout);
+    activeAbort = null;
+    isStreaming = false;
+    setStopMode(false);
+    $("sendBtn").disabled = false;
+    $("chatInput").focus();
   }
-
-  isStreaming = false;
-  $("sendBtn").disabled = false;
-  $("chatInput").focus();
 }
 
 marked.setOptions({ breaks: true, gfm: true });
