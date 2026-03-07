@@ -46,6 +46,14 @@ Tool routing:
 - today vs yesterday / trend → compare_periods (use group_by_country=true for per-country breakdown)
 - top/bottom/ranking (cities, restaurants, drivers, users) → top_bottom_performers
 - anything abnormal / health check → detect_anomalies
+- revenue / GMV / delivery fees / basket size → revenue_metrics (use group_by="country" for per-country)
+- ETA / delivery time / on-time rate → eta_accuracy
+- driver density / unassigned hotspots → geo_analysis
+- ratings / complaints / low scores → ratings_analysis
+- promos / coupons / redemption → promo_performance
+- dispatch queue / stuck dispatches → dispatch_queue (requires Redis)
+- set/list/remove alerts → set_alert
+- scheduled reports → scheduled_reports
 - city settings / dispatch config → city_config_lookup
 - currency for a country → flexible_query on "countrycurrency" with filter {"country.code":"XX"}
 - anything else → flexible_query (can query ANY collection)

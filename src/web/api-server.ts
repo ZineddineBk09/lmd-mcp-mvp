@@ -8,6 +8,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions.js";
+import mongoose from "mongoose";
 import { connectMongoDB } from "../connections/mongodb.js";
 import { getOpenAITools, executeTool, getToolCount } from "./tool-registry.js";
 import {
@@ -176,8 +177,10 @@ async function main() {
   );
 
   app.get("/api/health", (_req, res) => {
-    res.json({
-      status: "ok",
+    const dbReady = mongoose.connection.readyState === 1;
+    res.status(dbReady ? 200 : 503).json({
+      status: dbReady ? "ok" : "degraded",
+      db: dbReady ? "connected" : "disconnected",
       provider: provider.name,
       model: provider.model,
       tools: getToolCount(),
@@ -297,6 +300,9 @@ async function main() {
 
       const toolsUsed: Array<{ name: string; args: unknown }> = [];
       const queriesCollected: string[] = [];
+      let totalPromptTokens = 0;
+      let totalCompletionTokens = 0;
+      const requestStart = Date.now();
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         if (aborted) break;
@@ -308,6 +314,11 @@ async function main() {
           temperature: 0.1,
           max_tokens: 2048,
         });
+
+        if (response.usage) {
+          totalPromptTokens += response.usage.prompt_tokens ?? 0;
+          totalCompletionTokens += response.usage.completion_tokens ?? 0;
+        }
 
         if (aborted) break;
 
@@ -355,8 +366,12 @@ async function main() {
         }
 
         const text = assistantMsg.content ?? "";
+        const elapsed = Date.now() - requestStart;
+        const totalTokens = totalPromptTokens + totalCompletionTokens;
+        console.log(`[llm] ${message.slice(0, 60)} | ${totalPromptTokens}+${totalCompletionTokens}=${totalTokens} tokens | ${toolsUsed.length} tools | ${elapsed}ms`);
+
         send("content", { text });
-        send("meta", { tools_used: toolsUsed, queries: queriesCollected });
+        send("meta", { tools_used: toolsUsed, queries: queriesCollected, tokens: { prompt: totalPromptTokens, completion: totalCompletionTokens, total: totalTokens }, elapsed_ms: elapsed });
         send("done", {});
         clearTimeout(timeout);
         res.end();
@@ -367,7 +382,10 @@ async function main() {
         send("content", {
           text: "I reached the maximum number of tool calls. Here is what I found so far.",
         });
-        send("meta", { tools_used: toolsUsed, queries: queriesCollected });
+        const elapsed = Date.now() - requestStart;
+        const totalTokens = totalPromptTokens + totalCompletionTokens;
+        console.log(`[llm] ${message.slice(0, 60)} | ${totalPromptTokens}+${totalCompletionTokens}=${totalTokens} tokens (max rounds) | ${toolsUsed.length} tools | ${elapsed}ms`);
+        send("meta", { tools_used: toolsUsed, queries: queriesCollected, tokens: { prompt: totalPromptTokens, completion: totalCompletionTokens, total: totalTokens }, elapsed_ms: elapsed });
         send("done", {});
       }
       clearTimeout(timeout);
