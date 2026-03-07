@@ -353,6 +353,17 @@ function init() {
   $("clearBtn").addEventListener("click", clearChat);
   $("newChatBtn").addEventListener("click", clearChat);
 
+  $("devMode").checked = localStorage.getItem("devMode") === "true";
+  $("devMode").addEventListener("change", () => {
+    localStorage.setItem("devMode", $("devMode").checked);
+  });
+
+  const savedCountry = localStorage.getItem("countryFocus");
+  if (savedCountry) $("countrySelect").value = savedCountry;
+  $("countrySelect").addEventListener("change", () => {
+    localStorage.setItem("countryFocus", $("countrySelect").value);
+  });
+
   conversationId = generateId();
   loadConversationList();
   checkHealth();
