@@ -71,7 +71,7 @@ function buildSystemPrompt(settings: { country_code?: string; dev_mode?: boolean
   let prompt = SYSTEM_PROMPT;
 
   if (settings.country_code && settings.country_code !== "ALL") {
-    const names: Record<string, string> = { DZ: "Algeria", MA: "Morocco", TN: "Tunisia", CI: "Ivory Coast" };
+    const names: Record<string, string> = { DZ: "Algeria", MA: "Morocco", TN: "Tunisia", FR: "France", ZA: "South Africa", SN: "Senegal" };
     prompt += `\n\nCONTEXT: The operator is focused on ${names[settings.country_code] || settings.country_code} (${settings.country_code}). Default to country_code="${settings.country_code}" for all queries unless they explicitly mention another country.`;
   }
 
