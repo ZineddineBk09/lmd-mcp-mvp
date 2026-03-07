@@ -116,6 +116,12 @@ function buildSystemPrompt(settings: {
 
 const MAX_TOOL_ROUNDS = 12;
 
+const stats = {
+  visitors: new Set<string>(),
+  chatRequests: 0,
+  startedAt: new Date().toISOString(),
+};
+
 async function main() {
   await connectMongoDB();
 
@@ -268,7 +274,18 @@ async function main() {
     }
   });
 
+  app.get("/api/stats", (_req, res) => {
+    res.json({
+      unique_users: stats.visitors.size,
+      total_chats: stats.chatRequests,
+      started_at: stats.startedAt,
+    });
+  });
+
   app.post("/api/chat", async (req, res) => {
+    stats.visitors.add(req.ip || req.socket.remoteAddress || "unknown");
+    stats.chatRequests++;
+
     const {
       message,
       history = [],
