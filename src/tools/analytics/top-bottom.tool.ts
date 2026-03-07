@@ -12,8 +12,8 @@ export const topBottomSchema = z.object({
       "OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.",
     ),
   entity: z
-    .enum(["city", "restaurant", "driver"])
-    .describe("REQUIRED. What to rank: city, restaurant, or driver."),
+    .enum(["city", "restaurant", "driver", "user"])
+    .describe("REQUIRED. What to rank: city, restaurant, driver, or user."),
   metric: z
     .enum([
       "orders",
@@ -45,6 +45,7 @@ const ENTITY_GROUP_FIELD: Record<string, string> = {
   city: "$main_city",
   restaurant: "$restaurant_id",
   driver: "$driver_id",
+  user: "$user_id",
 };
 
 function buildMetricStage(metric: string): Record<string, unknown> {
@@ -160,12 +161,35 @@ export async function topBottom(params: TopBottomInput) {
         name: nameMap.get(String(r._id)) ?? String(r._id),
       }));
     }
+  } else if (params.entity === "user" && results.length > 0) {
+    const ids = results.map((r) => r._id).filter(Boolean);
+    const db = mongoose.connection.db;
+    if (db) {
+      const users = await db
+        .collection("users")
+        .find(
+          { _id: { $in: ids } },
+          { projection: { username: 1, "phone.number": 1 } },
+        )
+        .toArray();
+      const nameMap = new Map(
+        users.map((u: any) => [
+          String(u._id),
+          { name: u.username || String(u._id), phone: u.phone?.number },
+        ]),
+      );
+      enrichedResults = results.map((r) => {
+        const info = nameMap.get(String(r._id));
+        return { ...r, name: info?.name ?? String(r._id), phone: info?.phone };
+      });
+    }
   }
 
   const ranked = enrichedResults.map((r, i) => ({
     rank: i + 1,
     id: String(r._id),
     name: r.name ?? String(r._id),
+    ...(r.phone ? { phone: r.phone } : {}),
     value:
       params.metric === "avg_delivery_time"
         ? Math.round(r.avg_minutes ?? 0)

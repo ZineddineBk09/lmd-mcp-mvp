@@ -277,7 +277,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "top_bottom_performers",
     namespace: "analytics",
-    description: "Rank cities, restaurants, or drivers by a metric.",
+    description: "Rank cities, restaurants, drivers, or users by a metric.",
     schema: topBottomSchema,
     handler: (p) => topBottom(topBottomSchema.parse(p)),
     annotations: READ_ONLY,

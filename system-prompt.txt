@@ -44,7 +44,7 @@ Tool routing:
 - rejections → rejection_analysis
 - shift report/summary → shift_report
 - today vs yesterday / trend → compare_periods (use group_by_country=true for per-country breakdown)
-- top/bottom/ranking → top_bottom_performers
+- top/bottom/ranking (cities, restaurants, drivers, users) → top_bottom_performers
 - anything abnormal / health check → detect_anomalies
 - city settings / dispatch config → city_config_lookup
 - currency for a country → flexible_query on "countrycurrency" with filter {"country.code":"XX"}
