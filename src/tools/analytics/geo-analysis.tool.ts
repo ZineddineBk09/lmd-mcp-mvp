@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Driver } from "../../schemas/driver.schema.js";
 import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 export const geoAnalysisSchema = z.object({
@@ -60,10 +60,11 @@ export async function getGeoAnalysis(params: GeoAnalysisInput) {
     }));
 
     const executionTime = Date.now() - start;
+    const queryStr = formatAggregation("drivers", pipeline);
     logQuery({
       tool: "geo_analysis",
       params,
-      query: "drivers.aggregate group by city",
+      query: queryStr,
       execution_time_ms: executionTime,
       result_count: zones.length,
     });
@@ -76,7 +77,7 @@ export async function getGeoAnalysis(params: GeoAnalysisInput) {
         summary: `Driver density across ${zones.length} zones${params.country_code ? ` in ${params.country_code}` : ""}. Top zone: ${zones[0]?.city ?? "N/A"} with ${zones[0]?.total_drivers ?? 0} drivers (${zones[0]?.utilization_pct ?? 0}% utilization).`,
       },
       {
-        query: "drivers.aggregate group by city",
+        query: queryStr,
         collection: "drivers",
         execution_time_ms: executionTime,
         result_count: zones.length,
@@ -118,10 +119,11 @@ export async function getGeoAnalysis(params: GeoAnalysisInput) {
 
   const totalUnassigned = hotspots.reduce((s, h) => s + h.unassigned_count, 0);
   const executionTime = Date.now() - start;
+  const queryStr = formatAggregation("orders", pipeline);
   logQuery({
     tool: "geo_analysis",
     params,
-    query: "orders.aggregate unassigned by city",
+    query: queryStr,
     execution_time_ms: executionTime,
     result_count: hotspots.length,
   });
@@ -134,7 +136,7 @@ export async function getGeoAnalysis(params: GeoAnalysisInput) {
       summary: `${totalUnassigned} unassigned orders across ${hotspots.length} zones. Worst: ${hotspots[0]?.city ?? "N/A"} with ${hotspots[0]?.unassigned_count ?? 0} unassigned (oldest ${hotspots[0]?.oldest_order_minutes_ago ?? 0} min ago).`,
     },
     {
-      query: "orders.aggregate unassigned by city",
+      query: queryStr,
       collection: "orders",
       execution_time_ms: executionTime,
       result_count: hotspots.length,

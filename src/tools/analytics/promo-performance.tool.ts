@@ -1,6 +1,6 @@
 import { z } from "zod";
 import mongoose from "mongoose";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 export const promoPerformanceSchema = z.object({
@@ -73,10 +73,11 @@ export async function getPromoPerformance(params: PromoPerformanceInput) {
   const totalGenerated = rows.reduce((s, r) => s + r.total_generated, 0);
 
   const executionTime = Date.now() - start;
+  const queryStr = formatAggregation("coupon", pipeline);
   logQuery({
     tool: "promo_performance",
     params,
-    query: `coupon.aggregate group by code`,
+    query: queryStr,
     execution_time_ms: executionTime,
     result_count: rows.length,
   });
@@ -93,7 +94,7 @@ export async function getPromoPerformance(params: PromoPerformanceInput) {
       summary: `Promo performance (last ${params.since_hours}h): ${totalCoupons} coupons, ${totalGenerated} generated, ${totalUsed} used (${totalGenerated > 0 ? Math.round((totalUsed / totalGenerated) * 100) : 0}% redemption). Top: ${rows[0]?.code ?? "N/A"} (${rows[0]?.total_used ?? 0} uses).`,
     },
     {
-      query: "coupon.aggregate group by code",
+      query: queryStr,
       collection: "coupon",
       execution_time_ms: executionTime,
       result_count: rows.length,

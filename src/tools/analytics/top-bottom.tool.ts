@@ -1,7 +1,7 @@
 import { z } from "zod";
 import mongoose from "mongoose";
 import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 export const topBottomSchema = z.object({
@@ -212,13 +212,13 @@ export async function topBottom(params: TopBottomInput) {
   logQuery({
     tool: "top_bottom_performers",
     params,
-    query: `orders.aggregate([...group by ${params.entity}, sort by ${params.metric}])`,
+    query: formatAggregation("orders", pipeline),
     execution_time_ms: executionTime,
     result_count: ranked.length,
   });
 
   return wrapToolResponse(result, {
-    query: `orders.aggregate group by ${params.entity}, metric=${params.metric}`,
+    query: formatAggregation("orders", pipeline),
     collection: "orders",
     execution_time_ms: executionTime,
     result_count: ranked.length,

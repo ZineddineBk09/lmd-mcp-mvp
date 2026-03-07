@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
 
@@ -127,7 +127,7 @@ export async function getEtaAccuracy(params: EtaAccuracyInput) {
   logQuery({
     tool: "eta_accuracy",
     params,
-    query: `orders.aggregate([$match delivered+food_delivered, $group overall + by city])`,
+    query: formatAggregation("orders", overallPipeline),
     execution_time_ms: executionTime,
     result_count: totalDelivered,
   });
@@ -157,7 +157,7 @@ export async function getEtaAccuracy(params: EtaAccuracyInput) {
       summary,
     },
     {
-      query: `orders.aggregate ETA accuracy overall + by city`,
+      query: `Overall: ${formatAggregation("orders", overallPipeline)}\nBy city: ${formatAggregation("orders", byCityPipeline)}`,
       collection: "orders",
       execution_time_ms: executionTime,
       result_count: totalDelivered,

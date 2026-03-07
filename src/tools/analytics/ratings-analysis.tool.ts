@@ -1,6 +1,6 @@
 import { z } from "zod";
 import mongoose from "mongoose";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 export const ratingsAnalysisSchema = z.object({
@@ -122,10 +122,11 @@ export async function getRatingsAnalysis(params: RatingsAnalysisInput) {
   }));
 
   const executionTime = Date.now() - start;
+  const queryStr = formatAggregation("ratings", pipeline);
   logQuery({
     tool: "ratings_analysis",
     params,
-    query: `ratings.aggregate group by ${params.group_by}`,
+    query: queryStr,
     execution_time_ms: executionTime,
     result_count: rows.length,
   });
@@ -140,7 +141,7 @@ export async function getRatingsAnalysis(params: RatingsAnalysisInput) {
       summary: `${totalCount} ratings (${params.min_rating}-${params.max_rating} stars) in last ${params.since_hours}h, grouped by ${params.group_by}. Top: ${rows[0]?.name ?? "N/A"} with ${rows[0]?.complaint_count ?? 0} ratings (avg ${rows[0]?.avg_rating ?? "N/A"}).`,
     },
     {
-      query: `ratings.aggregate group by ${params.group_by}`,
+      query: queryStr,
       collection: "ratings",
       execution_time_ms: executionTime,
       result_count: rows.length,

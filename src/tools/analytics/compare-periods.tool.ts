@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatMongoQuery } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 
 const PERIOD_PRESETS = {
@@ -169,9 +169,14 @@ export async function comparePeriods(params: ComparePeriodsInput) {
       summary: `${params.metric} by country (${currentLabel} vs ${previousLabel}): ${breakdown.map((r) => `${r.country_code}: ${r.current} vs ${r.previous} (${r.delta >= 0 ? "+" : ""}${r.delta_pct}%)`).join(", ")}.`,
     };
 
+    const currentPipeline = [
+      { $match: { ...baseFilter, createdAt: { $gte: ranges.current.start, $lt: ranges.current.end } } },
+      { $group: { _id: "$country_code", count: { $sum: 1 } } },
+    ];
+    const queryStr = `Current: ${formatMongoQuery("orders", "aggregate", [currentPipeline])}\nPrevious: same pipeline with previous date range`;
     const executionTime = Date.now() - start;
-    logQuery({ tool: "compare_periods", params, query: `aggregate x2 grouped by country (${params.period})`, execution_time_ms: executionTime, result_count: breakdown.length });
-    return wrapToolResponse(result, { query: `orders.aggregate x2 group by country_code (${params.period})`, collection: "orders", execution_time_ms: executionTime, result_count: breakdown.length });
+    logQuery({ tool: "compare_periods", params, query: queryStr, execution_time_ms: executionTime, result_count: breakdown.length });
+    return wrapToolResponse(result, { query: queryStr, collection: "orders", execution_time_ms: executionTime, result_count: breakdown.length });
   }
 
   const [currentCount, previousCount] = await Promise.all([
@@ -207,17 +212,21 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     summary: `${params.metric} ${trend === "up" ? "increased" : trend === "down" ? "decreased" : "unchanged"}: ${currentCount} ${currentLabel} vs ${previousCount} ${previousLabel} (${delta >= 0 ? "+" : ""}${deltaPct}%) in ${params.country_code ?? "all"}${params.city ? `/${params.city}` : ""}.`,
   };
 
+  const currentFilter = { ...baseFilter, createdAt: { $gte: ranges.current.start, $lt: ranges.current.end } };
+  const previousFilter = { ...baseFilter, createdAt: { $gte: ranges.previous.start, $lt: ranges.previous.end } };
+  const queryStr = `Current: ${formatMongoQuery("orders", "countDocuments", [currentFilter])}\nPrevious: ${formatMongoQuery("orders", "countDocuments", [previousFilter])}`;
+
   const executionTime = Date.now() - start;
   logQuery({
     tool: "compare_periods",
     params,
-    query: `countDocuments x2 on orders for ${params.period}`,
+    query: queryStr,
     execution_time_ms: executionTime,
     result_count: 2,
   });
 
   return wrapToolResponse(result, {
-    query: `orders.countDocuments x2 (${params.period})`,
+    query: queryStr,
     collection: "orders",
     execution_time_ms: executionTime,
     result_count: currentCount + previousCount,

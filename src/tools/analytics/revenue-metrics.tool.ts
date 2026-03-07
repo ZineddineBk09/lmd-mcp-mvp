@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
+import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
 
@@ -109,7 +109,7 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
   logQuery({
     tool: "revenue_metrics",
     params,
-    query: `orders.aggregate([$match delivered, $group by ${params.group_by ?? "total"}])`,
+    query: formatAggregation("orders", pipeline),
     execution_time_ms: executionTime,
     result_count: rows.length,
   });
@@ -130,7 +130,7 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
       summary,
     },
     {
-      query: `orders.aggregate group by ${params.group_by ?? "total"}`,
+      query: formatAggregation("orders", pipeline),
       collection: "orders",
       execution_time_ms: executionTime,
       result_count: rows.length,
