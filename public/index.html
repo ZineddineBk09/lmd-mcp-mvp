@@ -142,6 +142,7 @@ select:focus{border-color:var(--primary)}
 .conv-item:hover .conv-del,.conv-item:hover .conv-export{opacity:1}
 .conv-del:hover{color:var(--accent);background:rgba(251,37,118,.15)}
 .conv-export:hover{color:var(--primary-light);background:rgba(84,26,176,.15)}
+#newConvoBtn:hover{background:var(--primary-dark)}
 
 /* Responsive */
 @media(max-width:768px){
@@ -194,6 +195,9 @@ select:focus{border-color:var(--primary)}
     </div>
 
     <div class="sidebar-section" style="flex:1;overflow-y:auto">
+      <button id="newConvoBtn" style="width:100%;padding:10px;margin-bottom:8px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s">
+        <span style="font-size:16px">&#x2b;</span> New Chat
+      </button>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <h3 style="margin:0">Recent Chats</h3>
         <div style="display:flex;gap:4px">
@@ -312,11 +316,11 @@ function loadConversationList() {
   list.slice(0, 30).forEach(c => {
     const row = document.createElement("div");
     row.className = "conv-item" + (c.id === conversationId ? " active" : "");
+    row.onclick = () => resumeConversation(c.id);
     const label = document.createElement("span");
     label.textContent = new Date(c.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
     label.title = `${c.message_count} messages`;
-    label.style.cursor = "pointer";
-    label.onclick = () => resumeConversation(c.id);
+    label.style.cssText = "cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1";
     const actions = document.createElement("div");
     actions.className = "conv-actions";
     const exp = document.createElement("button");
@@ -440,6 +444,7 @@ function init() {
   $("menuBtn").addEventListener("click", toggleSidebar);
   $("clearBtn").addEventListener("click", clearChat);
   $("newChatBtn").addEventListener("click", clearChat);
+  $("newConvoBtn").addEventListener("click", clearChat);
   $("exportConvBtn").addEventListener("click", exportConversations);
   $("importConvBtn").addEventListener("click", () => $("importFileInput").click());
   $("importFileInput").addEventListener("change", importConversations);
