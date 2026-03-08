@@ -80,6 +80,11 @@ select:focus{border-color:var(--primary)}
 /* Dev queries panel */
 .queries-panel{margin-top:8px;padding:10px 14px;background:#0a0a18;border:1px solid var(--border);border-radius:8px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;font-size:11px;color:var(--text-muted);line-height:1.8;word-break:break-all}
 .queries-panel summary{cursor:pointer;color:var(--text-dim);font-family:var(--font);font-size:12px;user-select:none}
+.query-row{display:flex;align-items:flex-start;gap:8px;margin-top:6px;padding:6px 8px;border-radius:6px;background:var(--surface)}
+.query-row code{flex:1;word-break:break-all;color:var(--text-muted)}
+.query-copy{flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px;transition:color .2s,border-color .2s}
+.query-copy:hover{color:var(--primary-light);border-color:var(--primary-light)}
+.query-copy.copied{color:var(--success);border-color:var(--success)}
 
 /* Quick actions */
 .quick-actions{padding:8px 24px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);background:var(--surface)}
@@ -187,7 +192,14 @@ select:focus{border-color:var(--primary)}
     </div>
 
     <div class="sidebar-section" style="flex:1;overflow-y:auto">
-      <h3>Recent Chats</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <h3 style="margin:0">Recent Chats</h3>
+        <div style="display:flex;gap:4px">
+          <button id="exportConvBtn" title="Export conversations" style="background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">&#8681; Export</button>
+          <button id="importConvBtn" title="Import conversations" style="background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:11px">&#8679; Import</button>
+        </div>
+      </div>
+      <input type="file" id="importFileInput" accept=".json" style="display:none">
       <div id="conversationList"></div>
     </div>
 
@@ -335,6 +347,45 @@ function resumeConversation(id) {
   loadConversationList();
 }
 
+function exportConversations() {
+  const convs = getStoredConversations();
+  if (Object.keys(convs).length === 0) { alert("No conversations to export."); return; }
+  const blob = new Blob([JSON.stringify(convs, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `yassir-ops-chats-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importConversations(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (typeof imported !== "object" || imported === null) throw new Error("Invalid format");
+      const existing = getStoredConversations();
+      let count = 0;
+      for (const [id, conv] of Object.entries(imported)) {
+        if (conv && typeof conv === "object" && Array.isArray(conv.messages)) {
+          existing[id] = conv;
+          count++;
+        }
+      }
+      saveStoredConversations(existing);
+      loadConversationList();
+      alert(`Imported ${count} conversation(s).`);
+    } catch {
+      alert("Invalid file format. Expected a JSON file exported from this app.");
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
 function $(id) { return document.getElementById(id); }
 
 function init() {
@@ -363,6 +414,9 @@ function init() {
   $("menuBtn").addEventListener("click", toggleSidebar);
   $("clearBtn").addEventListener("click", clearChat);
   $("newChatBtn").addEventListener("click", clearChat);
+  $("exportConvBtn").addEventListener("click", exportConversations);
+  $("importConvBtn").addEventListener("click", () => $("importFileInput").click());
+  $("importFileInput").addEventListener("change", importConversations);
 
   $("devMode").checked = localStorage.getItem("devMode") === "true";
   $("devMode").addEventListener("change", () => {
@@ -485,10 +539,33 @@ function addQueries(queries) {
   if (!queries.length) return;
   const details = document.createElement("details");
   details.className = "queries-panel";
-  details.innerHTML = `<summary>MongoDB Queries (${queries.length})</summary>${queries.map(q => `<div style="margin-top:6px">${escapeHtml(q)}</div>`).join("")}`;
+  const summary = document.createElement("summary");
+  summary.textContent = `MongoDB Queries (${queries.length})`;
+  details.appendChild(summary);
+  queries.forEach(q => {
+    const row = document.createElement("div");
+    row.className = "query-row";
+    const code = document.createElement("code");
+    code.textContent = q;
+    const btn = document.createElement("button");
+    btn.className = "query-copy";
+    btn.innerHTML = "&#x2398;";
+    btn.title = "Copy to clipboard";
+    btn.addEventListener("click", () => {
+      navigator.clipboard.writeText(q).then(() => {
+        btn.classList.add("copied");
+        btn.innerHTML = "&#x2713;";
+        setTimeout(() => { btn.classList.remove("copied"); btn.innerHTML = "&#x2398;"; }, 1500);
+      });
+    });
+    row.appendChild(code);
+    row.appendChild(btn);
+    details.appendChild(row);
+  });
   $("chatMessages").appendChild(details);
   scrollDown();
 }
+
 
 function scrollDown() {
   const el = $("chatMessages");
