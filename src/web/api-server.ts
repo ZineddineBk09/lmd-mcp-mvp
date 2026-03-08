@@ -11,12 +11,6 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import mongoose from "mongoose";
 import { connectMongoDB } from "../connections/mongodb.js";
 import { getOpenAITools, executeTool, getToolCount } from "./tool-registry.js";
-import {
-  saveConversation,
-  loadConversation,
-  listConversations,
-  deleteConversation,
-} from "./conversation-store.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -200,33 +194,6 @@ async function main() {
       model: provider.model,
       tools: getToolCount(),
     });
-  });
-
-  app.get("/api/conversations", (_req, res) => {
-    res.json(listConversations());
-  });
-
-  app.get("/api/conversations/:id", (req, res) => {
-    const conv = loadConversation(req.params.id);
-    if (!conv) {
-      res.status(404).json({ error: "Conversation not found" });
-      return;
-    }
-    res.json(conv);
-  });
-
-  app.post("/api/conversations/:id", (req, res) => {
-    const { messages, settings } = req.body as {
-      messages: Array<{ role: string; content: string }>;
-      settings?: Record<string, unknown>;
-    };
-    saveConversation(req.params.id, messages, settings);
-    res.json({ status: "saved" });
-  });
-
-  app.delete("/api/conversations/:id", (req, res) => {
-    const deleted = deleteConversation(req.params.id);
-    res.json({ status: deleted ? "deleted" : "not_found" });
   });
 
   app.post("/api/export", async (req, res) => {
