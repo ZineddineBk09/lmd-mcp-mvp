@@ -4,6 +4,7 @@ import { Order } from "../../schemas/order.schema.js";
 import { wrapToolResponse } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 import { ORDER_STATUS_LABELS } from "../../constants/order-status.js";
+import { getCurrencyForCountry } from "../../utils/currency.js";
 
 export const lookupOrderSchema = z.object({
   order_id: z
@@ -106,6 +107,11 @@ export async function lookupOrder(params: LookupOrderInput) {
     ORDER_STATUS_LABELS[raw.status as number] ?? `Unknown(${raw.status})`;
   const timeline = buildTimeline(history, createdAt);
 
+  if (!raw.currency_symbol && raw.country_code) {
+    const cur = await getCurrencyForCountry(raw.country_code as string);
+    raw.currency_symbol = cur.currency_symbol;
+  }
+
   const deliveredAt = history.food_delivered as Date | undefined;
   const deliveryMinutes = deliveredAt
     ? Math.round(
@@ -202,6 +208,7 @@ export async function lookupOrder(params: LookupOrderInput) {
       offer_discount: amounts.offer_discount ?? null,
       wallet_usage: amounts.wallet_usage ?? null,
       grand_total: amounts.grand_total ?? null,
+      currency_symbol: (raw.currency_symbol as string) ?? null,
     },
 
     payment: {
@@ -245,7 +252,9 @@ export async function lookupOrder(params: LookupOrderInput) {
         ? `Customer: ${user.username}${user.last_name ? " " + user.last_name : ""} (${userPhone.code && userPhone.number ? `${userPhone.code}${userPhone.number}` : "no phone"})`
         : null,
       `${foods.length} item(s)`,
-      amounts.grand_total != null ? `Total: ${amounts.grand_total}` : null,
+      amounts.grand_total != null
+        ? `Total: ${amounts.grand_total} ${(raw.currency_symbol as string) ?? ""}`
+        : null,
       raw.payment_type ? `Payment: ${raw.payment_type}` : null,
       rejectedList.length > 0
         ? `${rejectedList.length} driver rejections`

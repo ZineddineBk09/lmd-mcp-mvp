@@ -93,6 +93,46 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
       );
     }
 
+    try {
+      const url = new URL(params.webhook_url);
+      if (!["https:", "http:"].includes(url.protocol)) {
+        throw new Error("Invalid protocol");
+      }
+      const host = url.hostname.toLowerCase();
+      if (
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "0.0.0.0" ||
+        host.startsWith("10.") ||
+        host.startsWith("192.168.") ||
+        host.startsWith("172.") ||
+        host === "[::1]"
+      ) {
+        return wrapToolResponse(
+          {
+            error: "Webhook URL must not point to internal/private addresses.",
+          },
+          {
+            query: "add report (blocked URL)",
+            execution_time_ms: Date.now() - start,
+            result_count: 0,
+          },
+        );
+      }
+    } catch {
+      return wrapToolResponse(
+        {
+          error:
+            "Invalid webhook URL format. Must be a valid https:// or http:// URL.",
+        },
+        {
+          query: "add report (invalid URL)",
+          execution_time_ms: Date.now() - start,
+          result_count: 0,
+        },
+      );
+    }
+
     const id = `report_${Date.now()}`;
     const report: ScheduledReport = {
       id,

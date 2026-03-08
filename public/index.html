@@ -70,8 +70,8 @@ select:focus{border-color:var(--primary)}
 .msg.user .msg-meta{text-align:right}
 
 /* Tool call indicators */
-.chart-container{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0;max-width:500px}
-.chart-container canvas{width:100%!important;max-height:320px}
+.chart-container{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0;max-width:560px;height:320px;position:relative}
+.chart-container canvas{width:100%!important;height:100%!important}
 .tool-indicator{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-dim);align-self:flex-start;animation:fadeIn .2s ease}
 .tool-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--warn);animation:pulse 1s infinite}
 .tool-indicator.done .dot{background:var(--success);animation:none}
@@ -458,7 +458,6 @@ function addMessage(role, content) {
   bubble.className = "msg-bubble";
   if (role === "assistant") {
     bubble.innerHTML = renderMarkdown(content);
-    renderCharts(bubble);
   } else {
     bubble.textContent = content;
   }
@@ -468,6 +467,7 @@ function addMessage(role, content) {
   div.appendChild(bubble);
   div.appendChild(meta);
   $("chatMessages").appendChild(div);
+  if (role === "assistant") renderCharts(bubble);
   scrollDown();
   return bubble;
 }

@@ -158,7 +158,11 @@ async function main() {
 
   const API_KEY = process.env.API_KEY;
   if (API_KEY) {
-    app.use("/api/chat", (req, res, next) => {
+    const apiKeyGuard = (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction,
+    ) => {
       const provided =
         (req.headers["x-api-key"] as string | undefined) ??
         (req.query as Record<string, string>).api_key;
@@ -169,8 +173,12 @@ async function main() {
         return;
       }
       next();
-    });
-    console.log("[web] API key authentication enabled for /api/chat");
+    };
+    app.use("/api/chat", apiKeyGuard);
+    app.use("/api/export", apiKeyGuard);
+    console.log(
+      "[web] API key authentication enabled for /api/chat, /api/export",
+    );
   }
 
   const publicDir = resolve(__dirname, "..", "..", "public");

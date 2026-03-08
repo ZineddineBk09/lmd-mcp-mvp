@@ -26,15 +26,43 @@ const MAX_RESULT_CHARS = 6000;
 function safeStringify(value: unknown, maxLen: number): string {
   const text = JSON.stringify(value);
   if (text.length <= maxLen) return text;
-  if (typeof value === "object" && value !== null && "result" in value) {
+
+  if (typeof value === "object" && value !== null) {
     const obj = value as Record<string, unknown>;
-    const result = obj.result;
-    if (result && typeof result === "object" && "summary" in result) {
-      const summary = (result as Record<string, unknown>).summary;
-      return JSON.stringify({ result: { summary }, _truncated: true });
+    const result = ("result" in obj ? obj.result : obj) as Record<
+      string,
+      unknown
+    > | null;
+    if (result && typeof result === "object") {
+      if ("summary" in result) {
+        const compact: Record<string, unknown> = {
+          summary: result.summary,
+          _truncated: true,
+        };
+        if ("totals" in result) compact.totals = result.totals;
+        if ("count" in result) compact.count = result.count;
+        if ("order_count" in result) compact.order_count = result.order_count;
+        return JSON.stringify("result" in obj ? { result: compact } : compact);
+      }
+      if ("breakdown" in result && Array.isArray(result.breakdown)) {
+        const trimmed = {
+          ...result,
+          breakdown: result.breakdown.slice(0, 10),
+          _truncated: true,
+        };
+        const attempt = JSON.stringify(
+          "result" in obj ? { result: trimmed } : trimmed,
+        );
+        if (attempt.length <= maxLen) return attempt;
+      }
     }
   }
-  return text.slice(0, maxLen - 20) + ',"_truncated":true}';
+
+  return JSON.stringify({
+    _truncated: true,
+    _note:
+      "Response too large. Ask a more specific question or add filters to narrow results.",
+  });
 }
 
 export interface ToolExecResult {

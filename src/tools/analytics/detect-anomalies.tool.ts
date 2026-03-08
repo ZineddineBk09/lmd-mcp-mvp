@@ -63,10 +63,9 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
     { name: "restaurant_rejections", statusFilter: { status: 2 } },
   ];
 
-  const driverFilter: Record<string, unknown> = {
-    "address.country_code": params.country_code,
-    logout: 0,
-  };
+  const driverFilter: Record<string, unknown> = { logout: 0 };
+  if (params.country_code)
+    driverFilter["address.country_code"] = params.country_code;
   if (params.city) driverFilter["address.city"] = params.city;
 
   // Build ALL queries upfront, then run in parallel

@@ -4,6 +4,7 @@ import { Order } from "../../schemas/order.schema.js";
 import { wrapToolResponse } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
 import { ORDER_STATUS_LABELS } from "../../constants/order-status.js";
+import { getCurrencyForCountry } from "../../utils/currency.js";
 
 export const lookupUserSchema = z.object({
   phone: z
@@ -120,6 +121,8 @@ export async function lookupUser(params: LookupUserInput) {
         status: 1,
         createdAt: 1,
         main_city: 1,
+        country_code: 1,
+        currency_symbol: 1,
         "billings.amount.grand_total": 1,
         restaurant_id: 1,
         "restaurant.restaurantname": 1,
@@ -175,6 +178,11 @@ export async function lookupUser(params: LookupUserInput) {
   const userPhone = (user.phone ?? {}) as Record<string, unknown>;
   const userAddress = (user.address ?? {}) as Record<string, unknown>;
 
+  const userCountry = (userAddress.country_code as string) ?? null;
+  const userCurrency = userCountry
+    ? await getCurrencyForCountry(userCountry)
+    : null;
+
   const result = {
     user_id: String(userId),
     username: user.username ?? null,
@@ -188,7 +196,9 @@ export async function lookupUser(params: LookupUserInput) {
         : null),
     email: user.email ?? null,
     yassir_id: user.yassir_id ?? null,
-    country_code: userAddress.country_code ?? null,
+    country_code: userCountry,
+    currency_code: userCurrency?.currency_code ?? null,
+    currency_symbol: userCurrency?.currency_symbol ?? null,
     city: userAddress.city ?? null,
     status: user.status ?? null,
     avg_ratings: user.avg_ratings ?? null,
@@ -212,6 +222,8 @@ export async function lookupUser(params: LookupUserInput) {
           ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
         created_at: o.createdAt,
         city: o.main_city ?? null,
+        country_code: o.country_code ?? null,
+        currency_symbol: o.currency_symbol ?? null,
         restaurant: rest.restaurantname ?? null,
         grand_total: amounts.grand_total ?? null,
         payment_type: o.payment_type ?? null,

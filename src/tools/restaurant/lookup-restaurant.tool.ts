@@ -8,6 +8,7 @@ import {
   ORDER_STATUS_LABELS,
   ACTIVE_ORDER_STATUSES,
 } from "../../constants/order-status.js";
+import { getCurrencyForCountry } from "../../utils/currency.js";
 
 export const lookupRestaurantSchema = z.object({
   restaurant_id: z
@@ -139,93 +140,101 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
     menuByRestaurant.set(String(m._id), m.count);
   }
 
-  const results = restaurants.map((doc) => {
-    const raw = doc as Record<string, unknown>;
-    const restId = raw._id as mongoose.Types.ObjectId;
-    const restIdStr = String(restId);
-    const availability = raw.restaurantAvailability as
-      | Record<string, unknown>
-      | undefined;
-    const address = raw.address as Record<string, unknown> | undefined;
-    const restPhone = (raw.phone ?? {}) as Record<string, unknown>;
+  const results = await Promise.all(
+    restaurants.map(async (doc) => {
+      const raw = doc as Record<string, unknown>;
+      const restId = raw._id as mongoose.Types.ObjectId;
+      const restIdStr = String(restId);
+      const availability = raw.restaurantAvailability as
+        | Record<string, unknown>
+        | undefined;
+      const address = raw.address as Record<string, unknown> | undefined;
+      const restPhone = (raw.phone ?? {}) as Record<string, unknown>;
 
-    const activeOrders = activeByRestaurant.get(restIdStr) ?? [];
-    const stats = statsByRestaurant.get(restIdStr) ?? {
-      total: 0,
-      delivered: 0,
-      rejected_by_restaurant: 0,
-      cancelled: 0,
-      timed_out: 0,
-    };
-    const menuCount = menuByRestaurant.get(restIdStr) ?? 0;
+      const activeOrders = activeByRestaurant.get(restIdStr) ?? [];
+      const stats = statsByRestaurant.get(restIdStr) ?? {
+        total: 0,
+        delivered: 0,
+        rejected_by_restaurant: 0,
+        cancelled: 0,
+        timed_out: 0,
+      };
+      const menuCount = menuByRestaurant.get(restIdStr) ?? 0;
 
-    const acceptRate =
-      stats.total > 0
-        ? Math.round(
-            ((stats.total - stats.rejected_by_restaurant) / stats.total) * 100,
-          )
-        : null;
+      const acceptRate =
+        stats.total > 0
+          ? Math.round(
+              ((stats.total - stats.rejected_by_restaurant) / stats.total) *
+                100,
+            )
+          : null;
 
-    const isBusy = availability?.isBusy ?? false;
-    const busyUntil = availability?.busyUntil ?? null;
-    const isPostRejection = availability?.isPostRejection ?? false;
+      const isBusy = availability?.isBusy ?? false;
+      const busyUntil = availability?.busyUntil ?? null;
+      const isPostRejection = availability?.isPostRejection ?? false;
 
-    let statusLabel = "online";
-    if (raw.status === 0) statusLabel = "disabled";
-    else if (isBusy)
-      statusLabel = isPostRejection
-        ? "auto-busy (rejections)"
-        : "manually busy";
+      let statusLabel = "online";
+      if (raw.status === 0) statusLabel = "disabled";
+      else if (isBusy)
+        statusLabel = isPostRejection
+          ? "auto-busy (rejections)"
+          : "manually busy";
 
-    return {
-      restaurant_id: restIdStr,
-      name: raw.restaurantname ?? null,
-      email: raw.email ?? null,
-      phone:
-        restPhone.code && restPhone.number
-          ? `${restPhone.code}${restPhone.number}`
-          : null,
-      status: raw.status,
-      availability_label: statusLabel,
-      is_busy: isBusy,
-      busy_until: busyUntil,
-      is_post_rejection_busy: isPostRejection,
-      country_code: address?.country_code ?? null,
-      main_city: raw.main_city ?? null,
-      sub_city: raw.sub_city ?? null,
-      address_city: address?.city ?? null,
-      store_type: raw.store_type ?? null,
-      avg_ratings: raw.avg_ratings ?? null,
-      efp_time: raw.efp_time ?? null,
-      efp_time2: raw.efp_time2 ?? null,
-      minimum_cart: raw.minimum_cart ?? null,
-      is_pickup: raw.isPickup ?? false,
-      auto_accept_orders: raw.auto_accept_orders ?? false,
-      menu_items: menuCount,
-      lifetime_stats: {
-        total_requests: raw.tot_req ?? 0,
-        delivered: raw.deliverd ?? 0,
-        cancelled: raw.cancelled ?? 0,
-      },
-      active_orders_count: activeOrders.length,
-      active_orders: activeOrders.slice(0, 5).map((o) => ({
-        _id: String(o._id),
-        status: o.status,
-        status_label:
-          ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
-        created_at: o.createdAt,
-      })),
-      today_stats: {
-        total_orders: stats.total,
-        delivered: stats.delivered,
-        rejected_by_restaurant: stats.rejected_by_restaurant,
-        cancelled: stats.cancelled,
-        timed_out: stats.timed_out,
-        acceptance_rate_pct: acceptRate,
-      },
-      summary: `${raw.restaurantname ?? "?"} — ${statusLabel}. Today: ${stats.total} orders (${stats.delivered} delivered, ${stats.rejected_by_restaurant} rejected). ${activeOrders.length} active now. ${menuCount} menu items.`,
-    };
-  });
+      const cc = (address?.country_code as string) ?? null;
+      const cur = cc ? await getCurrencyForCountry(cc) : null;
+
+      return {
+        restaurant_id: restIdStr,
+        name: raw.restaurantname ?? null,
+        email: raw.email ?? null,
+        phone:
+          restPhone.code && restPhone.number
+            ? `${restPhone.code}${restPhone.number}`
+            : null,
+        status: raw.status,
+        availability_label: statusLabel,
+        is_busy: isBusy,
+        busy_until: busyUntil,
+        is_post_rejection_busy: isPostRejection,
+        country_code: cc,
+        currency_code: cur?.currency_code ?? null,
+        currency_symbol: cur?.currency_symbol ?? null,
+        main_city: raw.main_city ?? null,
+        sub_city: raw.sub_city ?? null,
+        address_city: address?.city ?? null,
+        store_type: raw.store_type ?? null,
+        avg_ratings: raw.avg_ratings ?? null,
+        efp_time: raw.efp_time ?? null,
+        efp_time2: raw.efp_time2 ?? null,
+        minimum_cart: raw.minimum_cart ?? null,
+        is_pickup: raw.isPickup ?? false,
+        auto_accept_orders: raw.auto_accept_orders ?? false,
+        menu_items: menuCount,
+        lifetime_stats: {
+          total_requests: raw.tot_req ?? 0,
+          delivered: raw.deliverd ?? 0,
+          cancelled: raw.cancelled ?? 0,
+        },
+        active_orders_count: activeOrders.length,
+        active_orders: activeOrders.slice(0, 5).map((o) => ({
+          _id: String(o._id),
+          status: o.status,
+          status_label:
+            ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
+          created_at: o.createdAt,
+        })),
+        today_stats: {
+          total_orders: stats.total,
+          delivered: stats.delivered,
+          rejected_by_restaurant: stats.rejected_by_restaurant,
+          cancelled: stats.cancelled,
+          timed_out: stats.timed_out,
+          acceptance_rate_pct: acceptRate,
+        },
+        summary: `${raw.restaurantname ?? "?"} — ${statusLabel}. Today: ${stats.total} orders (${stats.delivered} delivered, ${stats.rejected_by_restaurant} rejected). ${activeOrders.length} active now. ${menuCount} menu items.`,
+      };
+    }),
+  );
 
   const executionTime = Date.now() - start;
   logQuery({

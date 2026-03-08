@@ -2,6 +2,7 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
 import { logQuery } from "../../utils/query-logger.js";
+import { getCurrencyForCountry } from "../../utils/currency.js";
 
 export const promoPerformanceSchema = z.object({
   country_code: z
@@ -40,10 +41,12 @@ export async function getPromoPerformance(params: PromoPerformanceInput) {
     {
       $group: {
         _id: "$code",
-        total_generated: { $first: "$generated" },
-        total_used: { $first: "$used" },
+        total_generated: { $sum: { $ifNull: ["$generated", 0] } },
+        total_used: { $sum: { $ifNull: ["$used", 0] } },
         discount_type: { $first: "$amount_percentage" },
         min_order_amount: { $first: "$min_order" },
+        country_code: { $first: "$country_code" },
+        currency_symbol: { $first: "$currency_symbol" },
         status: { $first: "$status" },
         sample_description: { $first: "$description" },
       },
@@ -55,6 +58,10 @@ export async function getPromoPerformance(params: PromoPerformanceInput) {
   const results = await db.collection("coupon").aggregate(pipeline).toArray();
   const totalCoupons = await db.collection("coupon").countDocuments(match);
 
+  const currency = params.country_code
+    ? await getCurrencyForCountry(params.country_code)
+    : null;
+
   const rows = results.map((r) => ({
     code: r._id ?? "N/A",
     total_generated: r.total_generated ?? 0,
@@ -65,6 +72,8 @@ export async function getPromoPerformance(params: PromoPerformanceInput) {
         : 0,
     discount_type: r.discount_type ?? "N/A",
     min_order_amount: r.min_order_amount ?? null,
+    currency_symbol:
+      (r.currency_symbol as string) ?? currency?.currency_symbol ?? null,
     status: r.status,
     description: r.sample_description ?? null,
   }));
