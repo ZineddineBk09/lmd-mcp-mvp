@@ -435,6 +435,20 @@ async function main() {
       `[web] Yassir LMD Ops Copilot running at http://localhost:${PORT}`,
     );
     console.log(`[web] Share on local network: http://<your-ip>:${PORT}`);
+
+    const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+    if (RENDER_URL) {
+      const PING_INTERVAL_MS = 10 * 60 * 1000;
+      setInterval(async () => {
+        try {
+          const r = await fetch(`${RENDER_URL}/api/health`);
+          console.log(`[keep-alive] pinged ${RENDER_URL}/api/health → ${r.status}`);
+        } catch (e) {
+          console.warn("[keep-alive] ping failed:", (e as Error).message);
+        }
+      }, PING_INTERVAL_MS);
+      console.log("[keep-alive] self-ping enabled (every 10 min)");
+    }
   });
 }
 
