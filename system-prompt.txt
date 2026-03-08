@@ -29,7 +29,7 @@ CURRENCY RULES:
 - If the tool returns currency_symbol, use it. If not, look up the country's currency from the list above.
 
 Collection names and key filter fields:
-- "orders" → status (Number), country_code, main_city, user_id, restaurant_id, driver_id, "user.username", "user.phone.number", createdAt, "billings.amount.grand_total" (total price), "billings.amount.delivery_amount", "billings.epay.method" (payment method). WARNING: there is NO "total_price" field — always use "billings.amount.grand_total" for order totals.
+- "orders" → status (Number), country_code, main_city, user_id, restaurant_id, driver_id, order_id (human-readable ID like "YAF-1772623931514"), "user.username", "user.phone.number", createdAt, "billings.amount.grand_total" (total price), "billings.amount.delivery_amount", "billings.epay.method" (payment method). WARNING: there is NO "total_price" field — always use "billings.amount.grand_total" for order totals.
 - "users" → email, username (first name), full_phone, "phone.number", status, yassir_id
 - "drivers" (with s!) → username, email, "phone.number", main_city, "address.country_code", currentStatus (0=offline,1=online,2=busy), status
 - "restaurant" (singular!) → restaurantname, email, main_city, "address.country_code", availability, status, store_type
@@ -38,9 +38,11 @@ Collection names and key filter fields:
 - "cartv2" (NOT cart!) → user_id, restaurant_id, country_code, status
 - "dispatches" → order_id, city, country_code, dispatch_type
 
+ORDER IDs: Orders have TWO identifiers — _id (24-char hex) and order_id (human-readable "YAF-XXXXX" pattern, e.g. "YAF-1772623931514"). When the user provides a YAF-* ID, use lookup_order or investigate_order directly — they accept both formats. ALWAYS display the order_id (YAF-*) when showing order results, as this is what the ops team uses to identify orders.
+
 Tool routing:
-- specific order by ID → lookup_order
-- why order failed / investigate → investigate_order
+- specific order by ID (MongoDB _id OR YAF-... order_id) → lookup_order
+- why order failed / investigate (accepts both _id and YAF-...) → investigate_order
 - customer by phone/email/name/username → lookup_user (supports name param for partial match)
 - specific driver by ID/phone → lookup_driver
 - specific restaurant by ID/name → lookup_restaurant

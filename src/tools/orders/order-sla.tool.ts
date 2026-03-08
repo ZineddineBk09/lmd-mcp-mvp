@@ -98,6 +98,7 @@ export async function getOrderSlaStatus(params: OrderSlaInput) {
     {
       $project: {
         _id: 1,
+        order_id: 1,
         status: 1,
         createdAt: 1,
         main_city: 1,
@@ -140,6 +141,7 @@ export async function getOrderSlaStatus(params: OrderSlaInput) {
         count: breached.length,
         orders: breached.map((o) => ({
           _id: o._id.toString(),
+          order_id: o.order_id ?? null,
           status_label: ORDER_STATUS_LABELS[o.status],
           city: o.main_city,
           age_minutes: Math.round(o.total_age_minutes),
@@ -150,6 +152,7 @@ export async function getOrderSlaStatus(params: OrderSlaInput) {
         count: atRisk.length,
         orders: atRisk.map((o) => ({
           _id: o._id.toString(),
+          order_id: o.order_id ?? null,
           status_label: ORDER_STATUS_LABELS[o.status],
           city: o.main_city,
           age_minutes: Math.round(o.total_age_minutes),

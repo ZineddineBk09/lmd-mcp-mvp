@@ -70,11 +70,13 @@ export async function queryOrders(params: QueryOrdersInput) {
     {
       $project: {
         _id: 1,
+        order_id: 1,
         status: 1,
         createdAt: 1,
         updatedAt: 1,
         main_city: 1,
         sub_city: 1,
+        country_code: 1,
         driver_id: 1,
         restaurant_id: 1,
         rejectedDriversList: 1,
@@ -111,10 +113,12 @@ export async function queryOrders(params: QueryOrdersInput) {
     {
       orders: orders.map((o) => ({
         _id: o._id.toString(),
+        order_id: o.order_id ?? null,
         status: o.status,
         status_label: ORDER_STATUS_LABELS[o.status] || `Unknown(${o.status})`,
         created_at: o.createdAt,
         updated_at: o.updatedAt,
+        country_code: o.country_code ?? null,
         city: o.main_city,
         driver_id: o.driver_id?.toString() ?? null,
         restaurant_id: o.restaurant_id?.toString() ?? null,

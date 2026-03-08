@@ -159,7 +159,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: "lookup_order",
     namespace: "orders",
     description:
-      "Deep-dive into a single order by _id with full lifecycle timeline.",
+      "Deep-dive into a single order by _id or YAF-... order_id with full lifecycle timeline.",
     schema: lookupOrderSchema,
     handler: (p) => lookupOrder(lookupOrderSchema.parse(p)),
     annotations: READ_ONLY,
@@ -167,7 +167,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "investigate_order",
     namespace: "orders",
-    description: "Root cause analysis for an order with automated findings.",
+    description:
+      "Root cause analysis for an order (by _id or YAF-... order_id) with automated findings.",
     schema: investigateOrderSchema,
     handler: (p) => investigateOrder(investigateOrderSchema.parse(p)),
     annotations: READ_ONLY,

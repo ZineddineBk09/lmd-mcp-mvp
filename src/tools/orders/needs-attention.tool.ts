@@ -78,6 +78,7 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
     {
       $project: {
         _id: 1,
+        order_id: 1,
         status: 1,
         createdAt: 1,
         main_city: 1,
@@ -133,6 +134,7 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
     {
       $project: {
         _id: 1,
+        order_id: 1,
         status: 1,
         createdAt: 1,
         main_city: 1,
@@ -165,6 +167,7 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
     {
       unassigned_orders: unassigned.map((o) => ({
         _id: o._id.toString(),
+        order_id: o.order_id ?? null,
         status: o.status,
         status_label: ORDER_STATUS_LABELS[o.status],
         city: o.main_city,
@@ -174,6 +177,7 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
       })),
       pickup_delayed_orders: pickupDelayed.map((o) => ({
         _id: o._id.toString(),
+        order_id: o.order_id ?? null,
         status: o.status,
         status_label: ORDER_STATUS_LABELS[o.status],
         city: o.main_city,

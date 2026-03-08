@@ -12,7 +12,7 @@ export const investigateOrderSchema = z.object({
   order_id: z
     .string()
     .describe(
-      "REQUIRED. The order's MongoDB _id (24-char hex string). Investigates what happened and why.",
+      "REQUIRED. Either the MongoDB _id (24-char hex) OR the human-readable order_id (e.g. YAF-1772623931514). Both formats are accepted.",
     ),
 });
 
@@ -27,30 +27,32 @@ interface TimelineEvent {
 
 export async function investigateOrder(params: InvestigateOrderInput) {
   const start = Date.now();
+  const id = params.order_id.trim();
+  const isObjectId = /^[a-f0-9]{24}$/i.test(id);
 
-  let objectId: mongoose.Types.ObjectId;
-  try {
-    objectId = new mongoose.Types.ObjectId(params.order_id);
-  } catch {
-    return wrapToolResponse(
-      { error: `Invalid order_id: "${params.order_id}"` },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 },
-    );
+  let order: Record<string, unknown> | null = null;
+  let queryDesc: string;
+
+  if (isObjectId) {
+    order = await Order.findById(new mongoose.Types.ObjectId(id)).lean() as Record<string, unknown> | null;
+    queryDesc = `db.orders.findById("${id}")`;
+  } else {
+    order = await Order.findOne({ order_id: id }).lean() as Record<string, unknown> | null;
+    queryDesc = `db.orders.findOne({order_id:"${id}"})`;
   }
 
-  const order = await Order.findById(objectId).lean();
   if (!order) {
     return wrapToolResponse(
-      { error: `Order not found: ${params.order_id}` },
+      { error: `Order not found: ${id}` },
       {
-        query: `db.orders.findById("${params.order_id}")`,
+        query: queryDesc,
         execution_time_ms: Date.now() - start,
         result_count: 0,
       },
     );
   }
 
-  const raw = order as Record<string, unknown>;
+  const raw = order;
   const history = (raw.order_history ?? {}) as Record<string, unknown>;
   const status = raw.status as number;
   const createdAt = new Date(raw.createdAt as Date);
@@ -235,7 +237,8 @@ export async function investigateOrder(params: InvestigateOrderInput) {
     findings.length > 0 ? findings[0] : "No obvious issues detected.";
 
   const result = {
-    order_id: params.order_id,
+    _id: String(raw._id),
+    order_id: raw.order_id ?? params.order_id,
     status,
     status_label: statusLabel,
     country_code: raw.country_code,
@@ -259,20 +262,20 @@ export async function investigateOrder(params: InvestigateOrderInput) {
     rejected_drivers_count: rejectedList.length,
     findings,
     root_cause: rootCause,
-    summary: `Order ${params.order_id.slice(-6)} — ${statusLabel}. ${findings.length} findings. Root cause: ${rootCause}`,
+    summary: `Order ${id.slice(-6)} — ${statusLabel}. ${findings.length} findings. Root cause: ${rootCause}`,
   };
 
   const executionTime = Date.now() - start;
   logQuery({
     tool: "investigate_order",
     params,
-    query: `order + driver + restaurant + city lookups for ${params.order_id}`,
+    query: queryDesc,
     execution_time_ms: executionTime,
     result_count: 1,
   });
 
   return wrapToolResponse(result, {
-    query: `RCA for order ${params.order_id}`,
+    query: queryDesc,
     collection: "orders",
     execution_time_ms: executionTime,
     result_count: 1,

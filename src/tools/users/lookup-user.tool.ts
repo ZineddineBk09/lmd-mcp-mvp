@@ -118,6 +118,7 @@ export async function lookupUser(params: LookupUserInput) {
     Order.find(
       { $or: [{ user_id: userId }, { "user._id": userId }] },
       {
+        order_id: 1,
         status: 1,
         createdAt: 1,
         main_city: 1,
@@ -217,6 +218,7 @@ export async function lookupUser(params: LookupUserInput) {
       const rest = (o.restaurant ?? {}) as Record<string, unknown>;
       return {
         _id: String(o._id),
+        order_id: (o as Record<string, unknown>).order_id ?? null,
         status: o.status,
         status_label:
           ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
