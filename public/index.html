@@ -137,9 +137,11 @@ select:focus{border-color:var(--primary)}
 .conv-item{width:100%;padding:8px 10px;background:none;border:1px solid transparent;color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:12px;text-align:left;margin-bottom:4px;transition:.15s;display:flex;align-items:center;justify-content:space-between;gap:4px}
 .conv-item:hover{background:var(--surface2);border-color:var(--border)}
 .conv-item.active{background:var(--surface2);border-color:var(--primary-dim);color:var(--primary-light)}
-.conv-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;opacity:0;transition:.15s;flex-shrink:0}
-.conv-item:hover .conv-del{opacity:1}
+.conv-actions{display:flex;gap:2px;flex-shrink:0}
+.conv-del,.conv-export{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;opacity:0;transition:.15s;flex-shrink:0}
+.conv-item:hover .conv-del,.conv-item:hover .conv-export{opacity:1}
 .conv-del:hover{color:var(--accent);background:rgba(251,37,118,.15)}
+.conv-export:hover{color:var(--primary-light);background:rgba(84,26,176,.15)}
 
 /* Responsive */
 @media(max-width:768px){
@@ -315,13 +317,22 @@ function loadConversationList() {
     label.title = `${c.message_count} messages`;
     label.style.cursor = "pointer";
     label.onclick = () => resumeConversation(c.id);
+    const actions = document.createElement("div");
+    actions.className = "conv-actions";
+    const exp = document.createElement("button");
+    exp.className = "conv-export";
+    exp.innerHTML = "&#8681;";
+    exp.title = "Export this conversation";
+    exp.onclick = (e) => { e.stopPropagation(); exportSingleConversation(c.id); };
     const del = document.createElement("button");
     del.className = "conv-del";
     del.innerHTML = "&#x2715;";
     del.title = "Delete";
     del.onclick = (e) => { e.stopPropagation(); deleteConversation(c.id); };
+    actions.appendChild(exp);
+    actions.appendChild(del);
     row.appendChild(label);
-    row.appendChild(del);
+    row.appendChild(actions);
     container.appendChild(row);
   });
 }
@@ -355,6 +366,21 @@ function exportConversations() {
   const a = document.createElement("a");
   a.href = url;
   a.download = `yassir-ops-chats-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportSingleConversation(id) {
+  const convs = getStoredConversations();
+  const conv = convs[id];
+  if (!conv) { alert("Conversation not found."); return; }
+  const payload = { [id]: conv };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const dateStr = conv.created_at ? new Date(conv.created_at).toISOString().slice(0, 10) : "chat";
+  a.download = `yassir-ops-chat-${dateStr}-${id.slice(0, 8)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
