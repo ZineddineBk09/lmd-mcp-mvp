@@ -18,14 +18,11 @@ export const queryOrdersSchema = z.object({
       "OPTIONAL. City name (main_city). Omit to query the entire country.",
     ),
   status: z
-    .preprocess(
-      (val) => {
-        if (val == null) return undefined;
-        if (Array.isArray(val)) return val.map(Number);
-        return [Number(val)];
-      },
-      z.array(z.number()).optional(),
-    )
+    .preprocess((val) => {
+      if (val == null) return undefined;
+      if (Array.isArray(val)) return val.map(Number);
+      return [Number(val)];
+    }, z.array(z.number()).optional())
     .describe(
       "OPTIONAL. Filter by status codes. For ACTIVE orders use [1,3,5,6,17]. For DELIVERED use [7]. For CANCELLED use [9,10]. All codes: 1=received, 2=restaurant_rejected, 3=restaurant_accepted, 5=driver_accepted, 6=driver_at_restaurant, 7=delivered, 9=cancelled_user, 10=cancelled_admin, 11=timeout, 17=driver_picked_up, 90=cancelled_after_pickup. Omit to get all statuses.",
     ),

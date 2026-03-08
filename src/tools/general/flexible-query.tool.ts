@@ -134,9 +134,7 @@ function stripBlockedFields(
     if (Array.isArray(obj)) return obj.map((item) => recurse(item, depth + 1));
     if (typeof obj === "object" && !isObjectId(obj) && !(obj instanceof Date)) {
       const cleaned: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(
-        obj as Record<string, unknown>,
-      )) {
+      for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
         if (isBlocked(key)) {
           cleaned[key] = "[REDACTED]";
         } else {
@@ -492,10 +490,7 @@ export async function flexibleQuery(params: FlexibleQueryInput) {
         const total = await col.countDocuments(usedFilter);
         resultCount = total;
         const docs = rawDocs.map((d) =>
-          stripBlockedFields(
-            d as Record<string, unknown>,
-            params.collection,
-          ),
+          stripBlockedFields(d as Record<string, unknown>, params.collection),
         );
 
         result = {
