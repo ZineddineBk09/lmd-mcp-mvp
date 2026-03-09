@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IDriver extends Document {
   currentStatus: number;
@@ -47,8 +47,7 @@ const driverSchema = new Schema(
     first_name: String,
     last_name: String,
   },
-  { collection: "drivers", strict: false },
+  { collection: 'drivers', strict: false },
 );
 
-export const Driver =
-  mongoose.models.Driver || mongoose.model<IDriver>("Driver", driverSchema);
+export const Driver = mongoose.models.Driver || mongoose.model<IDriver>('Driver', driverSchema);

@@ -154,6 +154,25 @@ select:focus{border-color:var(--primary)}
   .msg{max-width:95%}
 }
 
+/* Confirmation action bar */
+.confirm-bar{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);align-self:flex-start;max-width:85%;animation:fadeIn .3s ease}
+.confirm-bar .confirm-label{font-size:12px;color:var(--text-dim);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.confirm-bar .reason-select{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;outline:none}
+.confirm-bar .reason-select:focus{border-color:var(--primary)}
+.confirm-bar .custom-reason-input{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;outline:none;display:none}
+.confirm-bar .custom-reason-input.visible{display:block}
+.confirm-bar .refund-row{display:flex;gap:8px;align-items:center}
+.confirm-bar .refund-row label{font-size:12px;color:var(--text-dim)}
+.confirm-buttons{display:flex;gap:8px;margin-top:4px}
+.confirm-btn{padding:8px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;display:flex;align-items:center;gap:6px}
+.confirm-btn.proceed{background:var(--success);color:#fff}
+.confirm-btn.proceed:hover{background:#0d9668;transform:translateY(-1px)}
+.confirm-btn.decline{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)}
+.confirm-btn.decline:hover{border-color:var(--accent);color:var(--accent)}
+.confirm-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.confirm-bar.resolved{opacity:.5;pointer-events:none}
+.confirm-bar.resolved .confirm-btn{cursor:default}
+
 /* Animations */
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes bounce{to{transform:translateY(-6px)}}
@@ -184,6 +203,15 @@ select:focus{border-color:var(--primary)}
         <option value="ZA">South Africa (ZA)</option>
         <option value="SN">Senegal (SN)</option>
       </select>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Auth Token</h3>
+      <input type="password" id="authTokenInput" placeholder="Paste JWT token..." style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;font-family:monospace;outline:none">
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        <div id="authDot" style="width:8px;height:8px;border-radius:50%;background:var(--text-muted)"></div>
+        <span id="authStatus" style="font-size:11px;color:var(--text-muted)">No token set</span>
+      </div>
     </div>
 
     <div class="sidebar-section">
@@ -418,6 +446,27 @@ function importConversations(e) {
 
 function $(id) { return document.getElementById(id); }
 
+function updateAuthStatus(token) {
+  const dot = $("authDot");
+  const label = $("authStatus");
+  if (!token) {
+    dot.style.background = "var(--text-muted)";
+    label.textContent = "No token set (using server default)";
+    label.style.color = "var(--text-muted)";
+    return;
+  }
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    dot.style.background = "var(--success)";
+    label.textContent = payload.username || "Authenticated";
+    label.style.color = "var(--success)";
+  } catch {
+    dot.style.background = "var(--warn)";
+    label.textContent = "Invalid token format";
+    label.style.color = "var(--warn)";
+  }
+}
+
 function init() {
   const qDiv = $("quickActions");
   QUICK_ACTIONS.forEach(a => {
@@ -454,6 +503,21 @@ function init() {
     localStorage.setItem("devMode", $("devMode").checked);
   });
 
+  const savedToken = localStorage.getItem("authToken");
+  if (savedToken) {
+    $("authTokenInput").value = savedToken;
+    updateAuthStatus(savedToken);
+  }
+  $("authTokenInput").addEventListener("change", function() {
+    const token = this.value.trim();
+    if (token) {
+      localStorage.setItem("authToken", token);
+    } else {
+      localStorage.removeItem("authToken");
+    }
+    updateAuthStatus(token);
+  });
+
   const savedCountry = localStorage.getItem("countryFocus");
   if (savedCountry) $("countrySelect").value = savedCountry;
   $("countrySelect").addEventListener("change", () => {
@@ -472,6 +536,11 @@ async function checkHealth() {
     $("providerName").textContent = data.provider;
     $("providerModel").textContent = data.model;
     $("providerDot").className = "provider-dot";
+    if (data.auth === "configured" && !localStorage.getItem("authToken")) {
+      updateAuthStatus(null);
+      $("authStatus").textContent = "Using server token";
+      $("authDot").style.background = "var(--primary-light)";
+    }
   } catch {
     $("providerName").textContent = "Offline";
     $("providerModel").textContent = "Server not reachable";
@@ -598,6 +667,133 @@ function addQueries(queries) {
 }
 
 
+function renderConfirmationBar(data) {
+  const bar = document.createElement("div");
+  bar.className = "confirm-bar";
+  bar.id = "confirmBar-" + Date.now();
+
+  const tool = data.tool;
+  const args = data.args || {};
+  const reasons = data.available_reasons;
+  const needsRefund = data.requires_refund;
+
+  // Reason selector (for cancel/reject)
+  if (reasons && reasons.length > 0) {
+    const label = document.createElement("div");
+    label.className = "confirm-label";
+    label.textContent = "Select a reason";
+    bar.appendChild(label);
+
+    const sel = document.createElement("select");
+    sel.className = "reason-select";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "— Choose a reason —";
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    sel.appendChild(placeholder);
+
+    reasons.forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = String(r.number);
+      opt.textContent = `${r.number}. ${r.reason}`;
+      opt.dataset.type = r.type || "api";
+      sel.appendChild(opt);
+    });
+    bar.appendChild(sel);
+
+    // Custom reason input (shown for Other/Retour)
+    const customInput = document.createElement("input");
+    customInput.className = "custom-reason-input";
+    customInput.type = "text";
+    customInput.placeholder = "Type your custom reason...";
+    bar.appendChild(customInput);
+
+    sel.addEventListener("change", () => {
+      const opt = sel.options[sel.selectedIndex];
+      const type = opt?.dataset.type;
+      if (type === "custom_other" || type === "custom_return") {
+        customInput.classList.add("visible");
+        customInput.focus();
+      } else {
+        customInput.classList.remove("visible");
+        customInput.value = "";
+      }
+    });
+  }
+
+  // Refund method selector (for delivered/e-payment orders)
+  if (needsRefund) {
+    const refundRow = document.createElement("div");
+    refundRow.className = "refund-row";
+    refundRow.innerHTML = `
+      <label>Refund to:</label>
+      <select class="reason-select" style="width:auto" id="refundSelect-${bar.id}">
+        <option value="wallet">Wallet (Yassir Cash)</option>
+        <option value="original">Original payment method</option>
+      </select>`;
+    bar.appendChild(refundRow);
+  }
+
+  // Buttons
+  const btnRow = document.createElement("div");
+  btnRow.className = "confirm-buttons";
+
+  const proceedBtn = document.createElement("button");
+  proceedBtn.className = "confirm-btn proceed";
+  proceedBtn.innerHTML = "&#10003; Confirm";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "confirm-btn decline";
+  cancelBtn.innerHTML = "&#10005; Cancel";
+
+  btnRow.appendChild(proceedBtn);
+  btnRow.appendChild(cancelBtn);
+  bar.appendChild(btnRow);
+
+  // Button handlers
+  proceedBtn.addEventListener("click", () => {
+    const confirmArgs = { ...args, confirmed: true };
+    const sel = bar.querySelector(".reason-select");
+    const customInput = bar.querySelector(".custom-reason-input");
+
+    if (sel && sel.value) {
+      confirmArgs.reason_number = parseInt(sel.value, 10);
+      const opt = sel.options[sel.selectedIndex];
+      const type = opt?.dataset.type;
+      if ((type === "custom_other" || type === "custom_return") && customInput?.value?.trim()) {
+        confirmArgs.reason = customInput.value.trim();
+      }
+    } else if (reasons && reasons.length > 0) {
+      // Reason required but not selected
+      sel.style.borderColor = "var(--accent)";
+      sel.focus();
+      return;
+    }
+
+    const refundSel = bar.querySelector("[id^='refundSelect-']");
+    if (refundSel) {
+      confirmArgs.refund_method = refundSel.value;
+    }
+
+    bar.classList.add("resolved");
+    const reasonText = sel ? sel.options[sel.selectedIndex]?.textContent : "";
+    const action = tool === "cancel_order" ? "Cancel" : tool === "reject_order" ? "Reject" : "Accept";
+    const msg = reasonText
+      ? `Confirmed: ${action} with reason ${reasonText}`
+      : `Confirmed: ${action}`;
+    sendPrompt(msg);
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    bar.classList.add("resolved");
+    sendPrompt("No, cancel this action. Do not proceed.");
+  });
+
+  $("chatMessages").appendChild(bar);
+  scrollDown();
+}
+
 function scrollDown() {
   const el = $("chatMessages");
   el.scrollTop = el.scrollHeight;
@@ -657,7 +853,6 @@ async function sendMessage() {
   input.style.height = "auto";
 
   addMessage("user", text);
-  chatHistory.push({ role: "user", content: text });
   showTyping();
 
   const settings = {
@@ -669,11 +864,25 @@ async function sendMessage() {
   activeAbort = controller;
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+  const reqHeaders = { "Content-Type": "application/json" };
+  const countryCode = $("countrySelect").value;
+  if (countryCode && countryCode !== "ALL") {
+    reqHeaders["country-code"] = countryCode;
+  }
+  const authToken = localStorage.getItem("authToken");
+  if (authToken) {
+    reqHeaders["authorization"] = authToken;
+  }
+
+  // Build request body BEFORE pushing to chatHistory to avoid sending the message twice
+  const requestBody = JSON.stringify({ message: text, history: chatHistory.slice(-20), settings });
+  chatHistory.push({ role: "user", content: text });
+
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, history: chatHistory.slice(-20), settings }),
+      headers: reqHeaders,
+      body: requestBody,
       signal: controller.signal,
     });
 
@@ -687,6 +896,7 @@ async function sendMessage() {
     let assistantText = "";
     let toolIndicators = new Map();
     let queries = [];
+    let pendingConfirmation = null;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -710,6 +920,8 @@ async function sendMessage() {
             } else if (eventType === "tool_result") {
               const ind = toolIndicators.get(data.name);
               if (ind) { ind.className = "tool-indicator done"; ind.querySelector(".dot").style.animation = "none"; }
+            } else if (eventType === "confirmation_needed") {
+              pendingConfirmation = data;
             } else if (eventType === "content") {
               hideTyping();
               assistantText = data.text;
@@ -730,6 +942,9 @@ async function sendMessage() {
       chatHistory.push({ role: "assistant", content: assistantText });
       autoSave();
       loadConversationList();
+    }
+    if (pendingConfirmation) {
+      renderConfirmationBar(pendingConfirmation);
     }
     if (settings.dev_mode && queries.length) {
       addQueries(queries);

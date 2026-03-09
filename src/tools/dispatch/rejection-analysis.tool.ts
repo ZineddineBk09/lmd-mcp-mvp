@@ -1,25 +1,14 @@
-import { z } from "zod";
-import { Order } from "../../schemas/order.schema.js";
-import { City } from "../../schemas/city.schema.js";
-import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
+import { z } from 'zod';
+import { Order } from '../../schemas/order.schema.js';
+import { City } from '../../schemas/city.schema.js';
+import { wrapToolResponse, formatAggregation } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
 
 export const rejectionAnalysisSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe(
-      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
-    ),
-  city: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. City name. Omit for entire country."),
-  since_minutes: z
-    .number()
-    .default(60)
-    .describe("OPTIONAL. Time window in minutes (default 60)."),
-  limit: z.number().default(30).describe("OPTIONAL. Max results (default 30)."),
+  country_code: z.string().optional().describe('OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.'),
+  city: z.string().optional().describe('OPTIONAL. City name. Omit for entire country.'),
+  since_minutes: z.number().default(60).describe('OPTIONAL. Time window in minutes (default 60).'),
+  limit: z.number().default(30).describe('OPTIONAL. Max results (default 30).'),
 });
 
 export type RejectionAnalysisInput = z.infer<typeof rejectionAnalysisSchema>;
@@ -31,7 +20,7 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
 
   const match: Record<string, unknown> = {
     createdAt: { $gte: sinceDate },
-    "rejectedDriversList.0": { $exists: true },
+    'rejectedDriversList.0': { $exists: true },
   };
   if (params.country_code) match.country_code = params.country_code;
   if (params.city) match.main_city = params.city;
@@ -41,7 +30,7 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
     {
       $addFields: {
         rejection_count: {
-          $size: { $ifNull: ["$rejectedDriversList", []] },
+          $size: { $ifNull: ['$rejectedDriversList', []] },
         },
       },
     },
@@ -61,12 +50,7 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
     { $limit: params.limit },
   ];
 
-  const [orders, cityConfig] = await Promise.all([
-    Order.aggregate(pipeline),
-    params.country_code
-      ? City.findOne({ country_code: params.country_code }).lean()
-      : Promise.resolve(null),
-  ]);
+  const [orders, cityConfig] = await Promise.all([Order.aggregate(pipeline), params.country_code ? City.findOne({ country_code: params.country_code }).lean() : Promise.resolve(null)]);
 
   const maxRejections = cityConfig?.max_rejected_drivers || 10;
 
@@ -85,12 +69,9 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
     .map(([driverId, count]) => ({ driver_id: driverId, rejections: count }));
 
   // City breakdown
-  const cityBreakdown: Record<
-    string,
-    { total_orders: number; total_rejections: number }
-  > = {};
+  const cityBreakdown: Record<string, { total_orders: number; total_rejections: number }> = {};
   for (const order of orders) {
-    const city = order.main_city || "unknown";
+    const city = order.main_city || 'unknown';
     if (!cityBreakdown[city]) {
       cityBreakdown[city] = { total_orders: 0, total_rejections: 0 };
     }
@@ -98,21 +79,16 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
     cityBreakdown[city].total_rejections += order.rejection_count;
   }
 
-  const atLimitOrders = orders.filter(
-    (o) => o.rejection_count >= maxRejections,
-  );
+  const atLimitOrders = orders.filter((o) => o.rejection_count >= maxRejections);
   const totalRejections = orders.reduce((sum, o) => sum + o.rejection_count, 0);
-  const avgRejectionsPerOrder =
-    orders.length > 0
-      ? Math.round((totalRejections / orders.length) * 10) / 10
-      : 0;
+  const avgRejectionsPerOrder = orders.length > 0 ? Math.round((totalRejections / orders.length) * 10) / 10 : 0;
 
   const executionTime = Date.now() - start;
 
   logQuery({
-    tool: "rejection_analysis",
+    tool: 'rejection_analysis',
     params,
-    query: formatAggregation("orders", pipeline),
+    query: formatAggregation('orders', pipeline),
     execution_time_ms: executionTime,
     result_count: orders.length,
   });
@@ -135,11 +111,11 @@ export async function getRejectionAnalysis(params: RejectionAnalysisInput) {
       top_rejecting_drivers: topRejectingDrivers,
       city_breakdown: cityBreakdown,
       time_range_minutes: params.since_minutes,
-      summary: `Rejection analysis for last ${params.since_minutes} min in ${params.country_code}${params.city ? ` / ${params.city}` : ""}: ${orders.length} orders with rejections, ${totalRejections} total rejections (avg ${avgRejectionsPerOrder}/order). ${atLimitOrders.length} orders hit the ${maxRejections}-rejection limit.`,
+      summary: `Rejection analysis for last ${params.since_minutes} min in ${params.country_code}${params.city ? ` / ${params.city}` : ''}: ${orders.length} orders with rejections, ${totalRejections} total rejections (avg ${avgRejectionsPerOrder}/order). ${atLimitOrders.length} orders hit the ${maxRejections}-rejection limit.`,
     },
     {
-      query: formatAggregation("orders", pipeline),
-      collection: "orders",
+      query: formatAggregation('orders', pipeline),
+      collection: 'orders',
       execution_time_ms: executionTime,
       result_count: orders.length,
     },

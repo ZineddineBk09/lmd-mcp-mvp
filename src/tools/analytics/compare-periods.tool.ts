@@ -1,7 +1,7 @@
-import { z } from "zod";
-import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse, formatMongoQuery } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
+import { z } from 'zod';
+import { Order } from '../../schemas/order.schema.js';
+import { wrapToolResponse, formatMongoQuery } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
 
 const PERIOD_PRESETS = {
   today_vs_yesterday: { currentHours: 0, previousHours: 24 },
@@ -11,45 +11,27 @@ const PERIOD_PRESETS = {
 } as const;
 
 export const comparePeriodsSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe(
-      "OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.",
-    ),
-  city: z.string().optional().describe("OPTIONAL. City name to filter."),
+  country_code: z.string().optional().describe('OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.'),
+  city: z.string().optional().describe('OPTIONAL. City name to filter.'),
   metric: z
-    .enum(["orders", "deliveries", "cancellations", "timeouts"])
-    .describe(
-      "REQUIRED. Metric to compare: orders (total), deliveries (status=7), cancellations (status 9,10,90), timeouts (status 11).",
-    ),
+    .enum(['orders', 'deliveries', 'cancellations', 'timeouts'])
+    .describe('REQUIRED. Metric to compare: orders (total), deliveries (status=7), cancellations (status 9,10,90), timeouts (status 11).'),
   period: z
-    .enum([
-      "today_vs_yesterday",
-      "this_week_vs_last",
-      "last_1h_vs_prev_1h",
-      "last_4h_vs_prev_4h",
-    ])
-    .default("today_vs_yesterday")
-    .describe("OPTIONAL. Comparison period (default: today_vs_yesterday)."),
-  group_by_country: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe(
-      "OPTIONAL. If true, returns breakdown per country in one call instead of aggregate total.",
-    ),
+    .enum(['today_vs_yesterday', 'this_week_vs_last', 'last_1h_vs_prev_1h', 'last_4h_vs_prev_4h'])
+    .default('today_vs_yesterday')
+    .describe('OPTIONAL. Comparison period (default: today_vs_yesterday).'),
+  group_by_country: z.boolean().optional().default(false).describe('OPTIONAL. If true, returns breakdown per country in one call instead of aggregate total.'),
 });
 
 export type ComparePeriodsInput = z.infer<typeof comparePeriodsSchema>;
 
 function getStatusFilter(metric: string): Record<string, unknown> | null {
   switch (metric) {
-    case "deliveries":
+    case 'deliveries':
       return { status: 7 };
-    case "cancellations":
+    case 'cancellations':
       return { status: { $in: [9, 10, 90] } };
-    case "timeouts":
+    case 'timeouts':
       return { status: 11 };
     default:
       return null;
@@ -62,7 +44,7 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
 } {
   const now = new Date();
 
-  if (period === "today_vs_yesterday") {
+  if (period === 'today_vs_yesterday') {
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
     const yesterdayStart = new Date(todayStart);
@@ -73,7 +55,7 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
     };
   }
 
-  if (period === "this_week_vs_last") {
+  if (period === 'this_week_vs_last') {
     const dayOfWeek = now.getDay();
     const weekStart = new Date(now);
     weekStart.setDate(weekStart.getDate() - dayOfWeek);
@@ -90,9 +72,7 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
   const currentEnd = now;
   const currentStart = new Date(now.getTime() - preset.currentHours * 3600000);
   const previousEnd = currentStart;
-  const previousStart = new Date(
-    currentStart.getTime() - preset.previousHours * 3600000,
-  );
+  const previousStart = new Date(currentStart.getTime() - preset.previousHours * 3600000);
 
   return {
     current: { start: currentStart, end: currentEnd },
@@ -102,17 +82,16 @@ function getTimeRanges(period: keyof typeof PERIOD_PRESETS): {
 
 function computeDelta(current: number, previous: number) {
   const delta = current - previous;
-  const deltaPct =
-    previous > 0 ? Math.round((delta / previous) * 100) : current > 0 ? 100 : 0;
-  const trend = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+  const deltaPct = previous > 0 ? Math.round((delta / previous) * 100) : current > 0 ? 100 : 0;
+  const trend = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
   return { delta, delta_pct: deltaPct, trend };
 }
 
 const PERIOD_LABELS: Record<string, [string, string]> = {
-  today_vs_yesterday: ["today", "yesterday"],
-  this_week_vs_last: ["this week", "last week"],
-  last_1h_vs_prev_1h: ["last 1h", "previous 1h"],
-  last_4h_vs_prev_4h: ["last 4h", "previous 4h"],
+  today_vs_yesterday: ['today', 'yesterday'],
+  this_week_vs_last: ['this week', 'last week'],
+  last_1h_vs_prev_1h: ['last 1h', 'previous 1h'],
+  last_4h_vs_prev_4h: ['last 4h', 'previous 4h'],
 };
 
 export async function comparePeriods(params: ComparePeriodsInput) {
@@ -135,7 +114,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
             createdAt: { $gte: ranges.current.start, $lt: ranges.current.end },
           },
         },
-        { $group: { _id: "$country_code", count: { $sum: 1 } } },
+        { $group: { _id: '$country_code', count: { $sum: 1 } } },
       ]).exec(),
       Order.aggregate([
         {
@@ -147,23 +126,16 @@ export async function comparePeriods(params: ComparePeriodsInput) {
             },
           },
         },
-        { $group: { _id: "$country_code", count: { $sum: 1 } } },
+        { $group: { _id: '$country_code', count: { $sum: 1 } } },
       ]).exec(),
     ]);
 
-    const KNOWN_COUNTRIES = ["DZ", "MA", "TN", "FR", "ZA", "SN"];
-    const prevMap = new Map(
-      previousAgg.map((r: { _id: string; count: number }) => [r._id, r.count]),
-    );
-    const countries = new Set([
-      ...KNOWN_COUNTRIES,
-      ...currentAgg.map((r: { _id: string }) => r._id),
-      ...previousAgg.map((r: { _id: string }) => r._id),
-    ]);
+    const KNOWN_COUNTRIES = ['DZ', 'MA', 'TN', 'FR', 'ZA', 'SN'];
+    const prevMap = new Map(previousAgg.map((r: { _id: string; count: number }) => [r._id, r.count]));
+    const countries = new Set([...KNOWN_COUNTRIES, ...currentAgg.map((r: { _id: string }) => r._id), ...previousAgg.map((r: { _id: string }) => r._id)]);
 
     const breakdown = [...countries].sort().map((cc) => {
-      const cur =
-        currentAgg.find((r: { _id: string }) => r._id === cc)?.count ?? 0;
+      const cur = currentAgg.find((r: { _id: string }) => r._id === cc)?.count ?? 0;
       const prev = prevMap.get(cc) ?? 0;
       return {
         country_code: cc,
@@ -187,7 +159,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
         previous: totalPrev,
         ...computeDelta(totalCur, totalPrev),
       },
-      summary: `${params.metric} by country (${currentLabel} vs ${previousLabel}): ${breakdown.map((r) => `${r.country_code}: ${r.current} vs ${r.previous} (${r.delta >= 0 ? "+" : ""}${r.delta_pct}%)`).join(", ")}.`,
+      summary: `${params.metric} by country (${currentLabel} vs ${previousLabel}): ${breakdown.map((r) => `${r.country_code}: ${r.current} vs ${r.previous} (${r.delta >= 0 ? '+' : ''}${r.delta_pct}%)`).join(', ')}.`,
     };
 
     const currentPipeline = [
@@ -197,12 +169,12 @@ export async function comparePeriods(params: ComparePeriodsInput) {
           createdAt: { $gte: ranges.current.start, $lt: ranges.current.end },
         },
       },
-      { $group: { _id: "$country_code", count: { $sum: 1 } } },
+      { $group: { _id: '$country_code', count: { $sum: 1 } } },
     ];
-    const queryStr = `Current: ${formatMongoQuery("orders", "aggregate", [currentPipeline])}\nPrevious: same pipeline with previous date range`;
+    const queryStr = `Current: ${formatMongoQuery('orders', 'aggregate', [currentPipeline])}\nPrevious: same pipeline with previous date range`;
     const executionTime = Date.now() - start;
     logQuery({
-      tool: "compare_periods",
+      tool: 'compare_periods',
       params,
       query: queryStr,
       execution_time_ms: executionTime,
@@ -210,7 +182,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     });
     return wrapToolResponse(result, {
       query: queryStr,
-      collection: "orders",
+      collection: 'orders',
       execution_time_ms: executionTime,
       result_count: breakdown.length,
     });
@@ -227,16 +199,12 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     }),
   ]);
 
-  const {
-    delta,
-    delta_pct: deltaPct,
-    trend,
-  } = computeDelta(currentCount, previousCount);
+  const { delta, delta_pct: deltaPct, trend } = computeDelta(currentCount, previousCount);
 
   const result = {
     metric: params.metric,
     country_code: params.country_code,
-    city: params.city ?? "all",
+    city: params.city ?? 'all',
     current_period: {
       label: currentLabel,
       count: currentCount,
@@ -250,7 +218,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     delta,
     delta_pct: deltaPct,
     trend,
-    summary: `${params.metric} ${trend === "up" ? "increased" : trend === "down" ? "decreased" : "unchanged"}: ${currentCount} ${currentLabel} vs ${previousCount} ${previousLabel} (${delta >= 0 ? "+" : ""}${deltaPct}%) in ${params.country_code ?? "all"}${params.city ? `/${params.city}` : ""}.`,
+    summary: `${params.metric} ${trend === 'up' ? 'increased' : trend === 'down' ? 'decreased' : 'unchanged'}: ${currentCount} ${currentLabel} vs ${previousCount} ${previousLabel} (${delta >= 0 ? '+' : ''}${deltaPct}%) in ${params.country_code ?? 'all'}${params.city ? `/${params.city}` : ''}.`,
   };
 
   const currentFilter = {
@@ -261,11 +229,11 @@ export async function comparePeriods(params: ComparePeriodsInput) {
     ...baseFilter,
     createdAt: { $gte: ranges.previous.start, $lt: ranges.previous.end },
   };
-  const queryStr = `Current: ${formatMongoQuery("orders", "countDocuments", [currentFilter])}\nPrevious: ${formatMongoQuery("orders", "countDocuments", [previousFilter])}`;
+  const queryStr = `Current: ${formatMongoQuery('orders', 'countDocuments', [currentFilter])}\nPrevious: ${formatMongoQuery('orders', 'countDocuments', [previousFilter])}`;
 
   const executionTime = Date.now() - start;
   logQuery({
-    tool: "compare_periods",
+    tool: 'compare_periods',
     params,
     query: queryStr,
     execution_time_ms: executionTime,
@@ -274,7 +242,7 @@ export async function comparePeriods(params: ComparePeriodsInput) {
 
   return wrapToolResponse(result, {
     query: queryStr,
-    collection: "orders",
+    collection: 'orders',
     execution_time_ms: executionTime,
     result_count: currentCount + previousCount,
   });

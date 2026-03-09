@@ -1,34 +1,22 @@
-import { z } from "zod";
-import { Order } from "../../schemas/order.schema.js";
-import { Restaurant } from "../../schemas/restaurant.schema.js";
-import { City } from "../../schemas/city.schema.js";
-import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
-import { ORDER_STATUS } from "../../constants/order-status.js";
+import { z } from 'zod';
+import { Order } from '../../schemas/order.schema.js';
+import { Restaurant } from '../../schemas/restaurant.schema.js';
+import { City } from '../../schemas/city.schema.js';
+import { wrapToolResponse, formatAggregation } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
+import { ORDER_STATUS } from '../../constants/order-status.js';
 
 export const autoBusyPredictionsSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe(
-      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
-    ),
-  city: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. City name. Omit for entire country."),
+  country_code: z.string().optional().describe('OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.'),
+  city: z.string().optional().describe('OPTIONAL. City name. Omit for entire country.'),
 });
 
-export type AutoBusyPredictionsInput = z.infer<
-  typeof autoBusyPredictionsSchema
->;
+export type AutoBusyPredictionsInput = z.infer<typeof autoBusyPredictionsSchema>;
 
 export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
   const start = Date.now();
 
-  const cityConfig = params.country_code
-    ? await City.findOne({ country_code: params.country_code }).lean()
-    : null;
+  const cityConfig = params.country_code ? await City.findOne({ country_code: params.country_code }).lean() : null;
 
   const maxRejectedOrders = cityConfig?.maxRejectedOrders || 5;
   const busySettings = cityConfig?.busySettings ?? false;
@@ -38,13 +26,13 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
     return wrapToolResponse(
       {
         auto_busy_enabled: false,
-        message: `Auto-busy feature is disabled for ${params.country_code ?? "all countries"}. busySettings=false in city config.`,
+        message: `Auto-busy feature is disabled for ${params.country_code ?? 'all countries'}. busySettings=false in city config.`,
         at_risk: [],
         currently_busy: [],
       },
       {
-        query: "City.findOne({country_code}).busySettings",
-        collection: "cities",
+        query: 'City.findOne({country_code}).busySettings',
+        collection: 'cities',
         execution_time_ms: Date.now() - start,
         result_count: 0,
       },
@@ -57,25 +45,20 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
   const restaurantFilter: Record<string, unknown> = {
     status: 1,
   };
-  if (params.country_code)
-    restaurantFilter["address.country_code"] = params.country_code;
-  if (params.city) restaurantFilter["address.city"] = params.city;
+  if (params.country_code) restaurantFilter['address.country_code'] = params.country_code;
+  if (params.city) restaurantFilter['address.city'] = params.city;
 
   const activeRestaurants = await Restaurant.find(restaurantFilter, {
     _id: 1,
     restaurantname: 1,
     restaurantAvailability: 1,
-    "address.city": 1,
+    'address.city': 1,
   }).lean();
 
-  const currentlyBusy = activeRestaurants.filter(
-    (r) => r.restaurantAvailability?.isBusy,
-  );
+  const currentlyBusy = activeRestaurants.filter((r) => r.restaurantAvailability?.isBusy);
 
   // For non-busy restaurants, check consecutive rejections
-  const nonBusyIds = activeRestaurants
-    .filter((r) => !r.restaurantAvailability?.isBusy)
-    .map((r) => r._id);
+  const nonBusyIds = activeRestaurants.filter((r) => !r.restaurantAvailability?.isBusy).map((r) => r._id);
 
   const pipeline = [
     {
@@ -87,8 +70,8 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
     { $sort: { createdAt: -1 as const } },
     {
       $group: {
-        _id: "$restaurant_id",
-        recent_statuses: { $push: "$status" },
+        _id: '$restaurant_id',
+        recent_statuses: { $push: '$status' },
       },
     },
   ];
@@ -104,19 +87,14 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
     rejections_until_busy: number;
   }> = [];
 
-  const restaurantMap = new Map(
-    activeRestaurants.map((r) => [r._id.toString(), r]),
-  );
+  const restaurantMap = new Map(activeRestaurants.map((r) => [r._id.toString(), r]));
 
   for (const entry of recentOrders) {
     const statuses = entry.recent_statuses.slice(0, maxRejectedOrders);
     let consecutiveRejections = 0;
 
     for (const status of statuses) {
-      if (
-        status === ORDER_STATUS.RESTAURANT_REJECTED_ORDER ||
-        status === ORDER_STATUS.ORDER_TIMEOUT
-      ) {
+      if (status === ORDER_STATUS.RESTAURANT_REJECTED_ORDER || status === ORDER_STATUS.ORDER_TIMEOUT) {
         consecutiveRejections++;
       } else {
         break;
@@ -127,7 +105,7 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
       const info = restaurantMap.get(entry._id?.toString());
       atRisk.push({
         restaurant_id: entry._id?.toString(),
-        name: info?.restaurantname ?? "Unknown",
+        name: info?.restaurantname ?? 'Unknown',
         city: info?.address?.city,
         consecutive_rejections: consecutiveRejections,
         threshold: maxRejectedOrders,
@@ -141,9 +119,9 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
   const executionTime = Date.now() - start;
 
   logQuery({
-    tool: "auto_busy_predictions",
+    tool: 'auto_busy_predictions',
     params,
-    query: formatAggregation("orders", pipeline),
+    query: formatAggregation('orders', pipeline),
     execution_time_ms: executionTime,
     result_count: atRisk.length,
   });
@@ -163,11 +141,11 @@ export async function getAutoBusyPredictions(params: AutoBusyPredictionsInput) {
         is_post_rejection: r.restaurantAvailability?.isPostRejection,
       })),
       currently_busy_count: currentlyBusy.length,
-      summary: `Auto-busy predictions for ${params.country_code}${params.city ? ` / ${params.city}` : ""}: ${atRisk.length} restaurants at risk (threshold: ${maxRejectedOrders} consecutive rejections). ${currentlyBusy.length} currently auto-busy. ${atRisk.filter((r) => r.rejections_until_busy <= 1).length} will trigger on next rejection.`,
+      summary: `Auto-busy predictions for ${params.country_code}${params.city ? ` / ${params.city}` : ''}: ${atRisk.length} restaurants at risk (threshold: ${maxRejectedOrders} consecutive rejections). ${currentlyBusy.length} currently auto-busy. ${atRisk.filter((r) => r.rejections_until_busy <= 1).length} will trigger on next rejection.`,
     },
     {
-      query: formatAggregation("orders", pipeline),
-      collection: "orders + restaurant + cities",
+      query: formatAggregation('orders', pipeline),
+      collection: 'orders + restaurant + cities',
       execution_time_ms: executionTime,
       result_count: atRisk.length,
     },

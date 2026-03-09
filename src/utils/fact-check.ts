@@ -1,5 +1,5 @@
-const DEBUG_ENABLED = process.env.ENABLE_DEBUG_OUTPUT !== "false";
-const COMPACT_MODE = process.env.COMPACT_RESPONSES === "true";
+const DEBUG_ENABLED = process.env.ENABLE_DEBUG_OUTPUT !== 'false';
+const COMPACT_MODE = process.env.COMPACT_RESPONSES === 'true';
 
 export interface DebugInfo {
   query: string;
@@ -14,13 +14,10 @@ export interface ToolResponse<T> {
   _debug?: DebugInfo;
 }
 
-export function wrapToolResponse<T>(
-  result: T,
-  debug: Omit<DebugInfo, "timestamp">,
-): ToolResponse<T> {
+export function wrapToolResponse<T>(result: T, debug: Omit<DebugInfo, 'timestamp'>): ToolResponse<T> {
   let finalResult = result;
 
-  if (COMPACT_MODE && result && typeof result === "object") {
+  if (COMPACT_MODE && result && typeof result === 'object') {
     finalResult = compactResult(result as Record<string, unknown>) as T;
   }
 
@@ -40,7 +37,7 @@ export function wrapToolResponse<T>(
 function compactResult(obj: Record<string, unknown>): Record<string, unknown> {
   const compact: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (key === "summary" || key === "error") {
+    if (key === 'summary' || key === 'error') {
       compact[key] = value;
       continue;
     }
@@ -54,19 +51,12 @@ function compactResult(obj: Record<string, unknown>): Record<string, unknown> {
   return compact;
 }
 
-export function formatMongoQuery(
-  collection: string,
-  method: string,
-  args: unknown[],
-): string {
-  const serialized = args.map((a) => JSON.stringify(a, replacer)).join(", ");
+export function formatMongoQuery(collection: string, method: string, args: unknown[]): string {
+  const serialized = args.map((a) => JSON.stringify(a, replacer)).join(', ');
   return `db.${collection}.${method}(${serialized})`;
 }
 
-export function formatAggregation(
-  collection: string,
-  pipeline: unknown[],
-): string {
+export function formatAggregation(collection: string, pipeline: unknown[]): string {
   return `db.${collection}.aggregate(${JSON.stringify(pipeline, replacer)})`;
 }
 
@@ -74,7 +64,7 @@ function replacer(_key: string, value: unknown): unknown {
   if (value instanceof Date) {
     return `ISODate("${value.toISOString()}")`;
   }
-  if (typeof value === "object" && value !== null && "$gte" in value) {
+  if (typeof value === 'object' && value !== null && '$gte' in value) {
     return value;
   }
   return value;

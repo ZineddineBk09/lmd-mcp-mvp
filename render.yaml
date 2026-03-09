@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: yassir-lmd-ops-copilot
+    runtime: node
+    rootDir: lmd-mcp-mvp
+    buildCommand: npm install && npm run build
+    startCommand: node dist/web/api-server.js
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      # --- Required: LLM Provider (set one) ---
+      - key: GEMINI_API_KEY
+        sync: false
+      # --- Required: MongoDB ---
+      - key: DB_URI
+        sync: false
+      - key: DB_NAME
+        value: yacool
+      # --- Required: Yassir Backend API ---
+      - key: YASSIR_API_BASE_URL
+        sync: false
+      - key: YASSIR_AUTH_TOKEN
+        sync: false
+      - key: YASSIR_IAP_COOKIE
+        sync: false
+      - key: YASSIR_COUNTRY_CODE
+        value: DZ
+      # --- Optional: API key to protect the endpoint ---
+      - key: API_KEY
+        sync: false
+      # --- Optional: Redis (tools that need it will gracefully degrade) ---
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      # --- Debug ---
+      - key: ENABLE_DEBUG_OUTPUT
+        value: "true"

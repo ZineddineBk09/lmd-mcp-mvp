@@ -18,11 +18,7 @@ export function cacheGet<T>(key: string): T | null {
   return entry.data as T;
 }
 
-export function cacheSet<T>(
-  key: string,
-  data: T,
-  ttlMs = DEFAULT_TTL_MS,
-): void {
+export function cacheSet<T>(key: string, data: T, ttlMs = DEFAULT_TTL_MS): void {
   if (store.size >= MAX_ENTRIES) {
     const oldest = store.keys().next().value;
     if (oldest) store.delete(oldest);
@@ -34,13 +30,10 @@ export function cacheClear(): void {
   store.clear();
 }
 
-export function buildCacheKey(
-  tool: string,
-  params: Record<string, unknown>,
-): string {
+export function buildCacheKey(tool: string, params: Record<string, unknown>): string {
   const sorted = Object.keys(params)
     .sort()
     .map((k) => `${k}=${JSON.stringify(params[k])}`)
-    .join("&");
+    .join('&');
   return `${tool}:${sorted}`;
 }

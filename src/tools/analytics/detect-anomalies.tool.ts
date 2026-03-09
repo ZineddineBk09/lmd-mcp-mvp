@@ -1,37 +1,27 @@
-import { z } from "zod";
-import { Order } from "../../schemas/order.schema.js";
-import { Driver } from "../../schemas/driver.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
-import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
+import { z } from 'zod';
+import { Order } from '../../schemas/order.schema.js';
+import { Driver } from '../../schemas/driver.schema.js';
+import { wrapToolResponse } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
+import { cacheGet, cacheSet, buildCacheKey } from '../../utils/cache.js';
 
 export const detectAnomaliesSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe(
-      "OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.",
-    ),
-  city: z.string().optional().describe("OPTIONAL. City name to focus on."),
+  country_code: z.string().optional().describe('OPTIONAL. Country code: DZ, MA, TN, FR, SN, ZA, etc. Omit to search all countries.'),
+  city: z.string().optional().describe('OPTIONAL. City name to focus on.'),
 });
 
 export type DetectAnomaliesInput = z.infer<typeof detectAnomaliesSchema>;
 
 interface AnomalyResult {
   metric: string;
-  severity: "high" | "medium" | "low";
+  severity: 'high' | 'medium' | 'low';
   current_value: number;
   baseline_avg: number;
   deviation_pct: number;
   message: string;
 }
 
-async function getHourlyCount(
-  baseFilter: Record<string, unknown>,
-  statusFilter: Record<string, unknown> | null,
-  startDate: Date,
-  endDate: Date,
-): Promise<number> {
+async function getHourlyCount(baseFilter: Record<string, unknown>, statusFilter: Record<string, unknown> | null, startDate: Date, endDate: Date): Promise<number> {
   const filter: Record<string, unknown> = {
     ...baseFilter,
     createdAt: { $gte: startDate, $lt: endDate },
@@ -56,29 +46,21 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
   if (params.city) baseFilter.main_city = params.city;
 
   const metrics = [
-    { name: "total_orders", statusFilter: null },
-    { name: "deliveries", statusFilter: { status: 7 } },
-    { name: "cancellations", statusFilter: { status: { $in: [9, 10, 90] } } },
-    { name: "timeouts", statusFilter: { status: 11 } },
-    { name: "restaurant_rejections", statusFilter: { status: 2 } },
+    { name: 'total_orders', statusFilter: null },
+    { name: 'deliveries', statusFilter: { status: 7 } },
+    { name: 'cancellations', statusFilter: { status: { $in: [9, 10, 90] } } },
+    { name: 'timeouts', statusFilter: { status: 11 } },
+    { name: 'restaurant_rejections', statusFilter: { status: 2 } },
   ];
 
   const driverFilter: Record<string, unknown> = { logout: 0 };
-  if (params.country_code)
-    driverFilter["address.country_code"] = params.country_code;
-  if (params.city) driverFilter["address.city"] = params.city;
+  if (params.country_code) driverFilter['address.country_code'] = params.country_code;
+  if (params.city) driverFilter['address.city'] = params.city;
 
   // Build ALL queries upfront, then run in parallel
-  const currentQueries = metrics.map((m) =>
-    getHourlyCount(
-      baseFilter,
-      m.statusFilter,
-      currentHourStart,
-      currentHourEnd,
-    ),
-  );
+  const currentQueries = metrics.map((m) => getHourlyCount(baseFilter, m.statusFilter, currentHourStart, currentHourEnd));
 
-  const baselineCacheKey = buildCacheKey("anomaly_baseline", {
+  const baselineCacheKey = buildCacheKey('anomaly_baseline', {
     ...params,
     hour: currentHour,
   } as Record<string, unknown>);
@@ -92,9 +74,7 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
         dayStart.setDate(dayStart.getDate() - d);
         const dayEnd = new Date(dayStart);
         dayEnd.setHours(currentHour + 1, 0, 0, 0);
-        historicalQueries.push(
-          getHourlyCount(baseFilter, metric.statusFilter, dayStart, dayEnd),
-        );
+        historicalQueries.push(getHourlyCount(baseFilter, metric.statusFilter, dayStart, dayEnd));
       }
     }
 
@@ -107,10 +87,7 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
     cacheSet(baselineCacheKey, baselineData, BASELINE_CACHE_TTL_MS);
   }
 
-  const [currentValues, onlineDrivers] = await Promise.all([
-    Promise.all(currentQueries),
-    Driver.countDocuments(driverFilter),
-  ]);
+  const [currentValues, onlineDrivers] = await Promise.all([Promise.all(currentQueries), Driver.countDocuments(driverFilter)]);
 
   const anomalies: AnomalyResult[] = [];
 
@@ -119,39 +96,23 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
     const currentValue = currentValues[i];
     const historicalCounts = baselineData[i];
 
-    const baselineAvg =
-      historicalCounts.length > 0
-        ? Math.round(
-            historicalCounts.reduce((a, b) => a + b, 0) /
-              historicalCounts.length,
-          )
-        : 0;
+    const baselineAvg = historicalCounts.length > 0 ? Math.round(historicalCounts.reduce((a, b) => a + b, 0) / historicalCounts.length) : 0;
 
     if (baselineAvg === 0 && currentValue === 0) continue;
 
-    const deviationPct =
-      baselineAvg > 0
-        ? Math.round(((currentValue - baselineAvg) / baselineAvg) * 100)
-        : currentValue > 0
-          ? 100
-          : 0;
+    const deviationPct = baselineAvg > 0 ? Math.round(((currentValue - baselineAvg) / baselineAvg) * 100) : currentValue > 0 ? 100 : 0;
 
     const absDeviation = Math.abs(deviationPct);
-    let severity: "high" | "medium" | "low" | null = null;
+    let severity: 'high' | 'medium' | 'low' | null = null;
 
-    if (absDeviation >= 50) severity = "high";
-    else if (absDeviation >= 30) severity = "medium";
-    else if (
-      absDeviation >= 20 &&
-      (metric.name === "cancellations" ||
-        metric.name === "timeouts" ||
-        metric.name === "restaurant_rejections")
-    ) {
-      severity = "low";
+    if (absDeviation >= 50) severity = 'high';
+    else if (absDeviation >= 30) severity = 'medium';
+    else if (absDeviation >= 20 && (metric.name === 'cancellations' || metric.name === 'timeouts' || metric.name === 'restaurant_rejections')) {
+      severity = 'low';
     }
 
     if (severity) {
-      const direction = deviationPct > 0 ? "higher" : "lower";
+      const direction = deviationPct > 0 ? 'higher' : 'lower';
       anomalies.push({
         metric: metric.name,
         severity,
@@ -168,12 +129,12 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
     return sevOrder[a.severity] - sevOrder[b.severity];
   });
 
-  const highCount = anomalies.filter((a) => a.severity === "high").length;
-  const mediumCount = anomalies.filter((a) => a.severity === "medium").length;
+  const highCount = anomalies.filter((a) => a.severity === 'high').length;
+  const mediumCount = anomalies.filter((a) => a.severity === 'medium').length;
 
   const result = {
     country_code: params.country_code,
-    city: params.city ?? "all",
+    city: params.city ?? 'all',
     current_hour: `${currentHour}:00`,
     baseline_days: 7,
     online_drivers: onlineDrivers,
@@ -181,16 +142,16 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
     anomalies,
     summary:
       anomalies.length === 0
-        ? `No anomalies detected in ${params.country_code}${params.city ? `/${params.city}` : ""} this hour. All metrics within normal range. ${onlineDrivers} drivers online.`
-        : `${anomalies.length} anomalies in ${params.country_code}${params.city ? `/${params.city}` : ""}: ${highCount} high, ${mediumCount} medium severity. ${anomalies
+        ? `No anomalies detected in ${params.country_code}${params.city ? `/${params.city}` : ''} this hour. All metrics within normal range. ${onlineDrivers} drivers online.`
+        : `${anomalies.length} anomalies in ${params.country_code}${params.city ? `/${params.city}` : ''}: ${highCount} high, ${mediumCount} medium severity. ${anomalies
             .slice(0, 2)
             .map((a) => a.message)
-            .join(" ")} ${onlineDrivers} drivers online.`,
+            .join(' ')} ${onlineDrivers} drivers online.`,
   };
 
   const executionTime = Date.now() - start;
   logQuery({
-    tool: "detect_anomalies",
+    tool: 'detect_anomalies',
     params,
     query: `7-day baseline comparison across ${metrics.length} metrics`,
     execution_time_ms: executionTime,
@@ -199,7 +160,7 @@ export async function detectAnomalies(params: DetectAnomaliesInput) {
 
   return wrapToolResponse(result, {
     query: `Hourly anomaly detection: ${metrics.length} metrics x 7 days baseline (parallelized)`,
-    collection: "orders",
+    collection: 'orders',
     execution_time_ms: executionTime,
     result_count: anomalies.length,
   });
