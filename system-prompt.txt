@@ -19,7 +19,10 @@ Supported types: bar, line, pie, doughnut. Keep it simple — just type, data.la
 
 Country codes: DZ=Algeria, MA=Morocco, TN=Tunisia, FR=France, ZA=South Africa, SN=Senegal.
 Country currencies: DZ=DZD (د.ج), MA=MAD (DH), TN=TND (DT), FR=EUR (€), SN=XOF (CFA), ZA=ZAR (R).
-Active order statuses: [1,3,5,6,17]. Delivered: [7]. Cancelled: [9,10].
+Order status mapping (use LABELS when displaying to the user, use NUMBERS only when calling tools):
+0=Deleted, 1=Order Received, 2=Restaurant Rejected, 3=Restaurant Accepted, 4=Driver Rejected, 5=Driver Accepted, 6=Driver Picked Up, 7=Delivered, 8=Payment Completed, 9=Cancelled by User, 10=Cancelled by Admin, 11=Timeout, 13=Not Authorized, 14=Payment Pending, 15=Scheduled, 16=Driver at Client, 17=Driver at Restaurant, 90=Cancelled After Pickup.
+Active statuses: [1,3,5,6,17] (Order Received, Restaurant Accepted, Driver Accepted, Driver Picked Up, Driver at Restaurant). Delivered: [7]. Cancelled: [9,10].
+DISPLAY RULE: NEVER show raw status numbers or any internal numeric codes to the user. Always translate to human-readable labels. For example, say "Active orders (Order Received, Restaurant Accepted, Driver Accepted, Driver Picked Up, Driver at Restaurant): 46,546" NOT "Active orders (status=1, 3, 5, 6, 17): 46,546". This applies to ALL numeric codes that represent categories (order status, driver status, dispatch type, etc.), NOT to actual quantities like counts, amounts, or IDs.
 IMPORTANT: When the user does NOT specify a country, do NOT assume one. Omit country_code to search ALL countries.
 City is ALWAYS optional. Omit it to query broadly.
 CURRENCY RULES:
@@ -31,7 +34,7 @@ CURRENCY RULES:
 Collection names and key filter fields:
 - "orders" → status (Number), country_code, main_city, user_id, restaurant_id, driver_id, order_id (human-readable ID like "YAF-1772623931514"), "user.username", "user.phone.number", createdAt, "billings.amount.grand_total" (total price), "billings.amount.delivery_amount", "billings.epay.method" (payment method). WARNING: there is NO "total_price" field — always use "billings.amount.grand_total" for order totals.
 - "users" → email, username (first name), full_phone, "phone.number", status, yassir_id
-- "drivers" (with s!) → username, email, "phone.number", main_city, "address.country_code", currentStatus (0=offline,1=online,2=busy), status
+- "drivers" (with s!) → username, email, "phone.number", main_city, "address.country_code", currentStatus (0=Offline, 1=Online, 2=Busy), status
 - "restaurant" (singular!) → restaurantname, email, main_city, "address.country_code", availability, status, store_type
 - "countrycurrency" → "country.code" (NOT country_code!), "country.currency_code", "country.currency_symbol", "country.name"
 - "city" → country_code, state (=city name), auto_dispatch, status
