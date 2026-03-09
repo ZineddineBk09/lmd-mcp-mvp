@@ -1,17 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  unlinkSync,
-} from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const STORE_DIR = resolve(__dirname, "..", "..", "data", "conversations");
+const STORE_DIR = resolve(__dirname, '..', '..', 'data', 'conversations');
 
 export interface ConversationEntry {
   id: string;
@@ -25,18 +18,14 @@ function ensureDir() {
   if (!existsSync(STORE_DIR)) mkdirSync(STORE_DIR, { recursive: true });
 }
 
-export function saveConversation(
-  id: string,
-  messages: Array<{ role: string; content: string }>,
-  settings?: Record<string, unknown>,
-): void {
+export function saveConversation(id: string, messages: Array<{ role: string; content: string }>, settings?: Record<string, unknown>): void {
   ensureDir();
   const filePath = resolve(STORE_DIR, `${id}.json`);
   const now = new Date().toISOString();
   let entry: ConversationEntry;
 
   if (existsSync(filePath)) {
-    entry = JSON.parse(readFileSync(filePath, "utf-8"));
+    entry = JSON.parse(readFileSync(filePath, 'utf-8'));
     entry.updated_at = now;
     entry.messages = messages.map((m) => ({ ...m, timestamp: now }));
   } else {
@@ -55,7 +44,7 @@ export function saveConversation(
 export function loadConversation(id: string): ConversationEntry | null {
   const filePath = resolve(STORE_DIR, `${id}.json`);
   if (!existsSync(filePath)) return null;
-  return JSON.parse(readFileSync(filePath, "utf-8"));
+  return JSON.parse(readFileSync(filePath, 'utf-8'));
 }
 
 export function listConversations(): Array<{
@@ -65,12 +54,10 @@ export function listConversations(): Array<{
   message_count: number;
 }> {
   ensureDir();
-  const files = readdirSync(STORE_DIR).filter((f) => f.endsWith(".json"));
+  const files = readdirSync(STORE_DIR).filter((f) => f.endsWith('.json'));
   return files
     .map((f) => {
-      const data = JSON.parse(
-        readFileSync(resolve(STORE_DIR, f), "utf-8"),
-      ) as ConversationEntry;
+      const data = JSON.parse(readFileSync(resolve(STORE_DIR, f), 'utf-8')) as ConversationEntry;
       return {
         id: data.id,
         created_at: data.created_at,

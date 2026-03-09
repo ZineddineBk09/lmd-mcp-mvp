@@ -1,35 +1,14 @@
-import { z } from "zod";
-import { wrapToolResponse } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
+import { z } from 'zod';
+import { wrapToolResponse } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
 
 export const scheduledReportSchema = z.object({
-  action: z
-    .enum(["list", "add", "remove"])
-    .describe("REQUIRED. Action to perform."),
-  report_type: z
-    .enum(["shift_report", "anomaly_check", "fleet_status", "revenue_summary"])
-    .optional()
-    .describe("Report type (required for add)."),
-  interval_hours: z
-    .number()
-    .optional()
-    .describe(
-      "Interval in hours between reports (required for add). E.g. 8 for every shift.",
-    ),
-  webhook_url: z
-    .string()
-    .optional()
-    .describe(
-      "Webhook URL to POST the report to (required for add). Slack, Teams, or custom endpoint.",
-    ),
-  country_code: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. Country code scope for the report."),
-  report_id: z
-    .string()
-    .optional()
-    .describe("Report ID to remove (required for remove action)."),
+  action: z.enum(['list', 'add', 'remove']).describe('REQUIRED. Action to perform.'),
+  report_type: z.enum(['shift_report', 'anomaly_check', 'fleet_status', 'revenue_summary']).optional().describe('Report type (required for add).'),
+  interval_hours: z.number().optional().describe('Interval in hours between reports (required for add). E.g. 8 for every shift.'),
+  webhook_url: z.string().optional().describe('Webhook URL to POST the report to (required for add). Slack, Teams, or custom endpoint.'),
+  country_code: z.string().optional().describe('OPTIONAL. Country code scope for the report.'),
+  report_id: z.string().optional().describe('Report ID to remove (required for remove action).'),
 });
 
 export type ScheduledReportInput = z.infer<typeof scheduledReportSchema>;
@@ -55,12 +34,12 @@ function computeNextRun(intervalHours: number): string {
 export async function manageScheduledReports(params: ScheduledReportInput) {
   const start = Date.now();
 
-  if (params.action === "list") {
+  if (params.action === 'list') {
     const reports = Array.from(reportStore.values());
     logQuery({
-      tool: "scheduled_reports",
+      tool: 'scheduled_reports',
       params,
-      query: "list reports",
+      query: 'list reports',
       execution_time_ms: Date.now() - start,
       result_count: reports.length,
     });
@@ -71,22 +50,21 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
         summary: `${reports.length} scheduled report(s) configured.`,
       },
       {
-        query: "list scheduled reports",
+        query: 'list scheduled reports',
         execution_time_ms: Date.now() - start,
         result_count: reports.length,
       },
     );
   }
 
-  if (params.action === "add") {
+  if (params.action === 'add') {
     if (!params.report_type || !params.interval_hours || !params.webhook_url) {
       return wrapToolResponse(
         {
-          error:
-            "report_type, interval_hours, and webhook_url are required for add action.",
+          error: 'report_type, interval_hours, and webhook_url are required for add action.',
         },
         {
-          query: "add report (validation failed)",
+          query: 'add report (validation failed)',
           execution_time_ms: Date.now() - start,
           result_count: 0,
         },
@@ -95,25 +73,17 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
 
     try {
       const url = new URL(params.webhook_url);
-      if (!["https:", "http:"].includes(url.protocol)) {
-        throw new Error("Invalid protocol");
+      if (!['https:', 'http:'].includes(url.protocol)) {
+        throw new Error('Invalid protocol');
       }
       const host = url.hostname.toLowerCase();
-      if (
-        host === "localhost" ||
-        host === "127.0.0.1" ||
-        host === "0.0.0.0" ||
-        host.startsWith("10.") ||
-        host.startsWith("192.168.") ||
-        host.startsWith("172.") ||
-        host === "[::1]"
-      ) {
+      if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.startsWith('10.') || host.startsWith('192.168.') || host.startsWith('172.') || host === '[::1]') {
         return wrapToolResponse(
           {
-            error: "Webhook URL must not point to internal/private addresses.",
+            error: 'Webhook URL must not point to internal/private addresses.',
           },
           {
-            query: "add report (blocked URL)",
+            query: 'add report (blocked URL)',
             execution_time_ms: Date.now() - start,
             result_count: 0,
           },
@@ -122,11 +92,10 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
     } catch {
       return wrapToolResponse(
         {
-          error:
-            "Invalid webhook URL format. Must be a valid https:// or http:// URL.",
+          error: 'Invalid webhook URL format. Must be a valid https:// or http:// URL.',
         },
         {
-          query: "add report (invalid URL)",
+          query: 'add report (invalid URL)',
           execution_time_ms: Date.now() - start,
           result_count: 0,
         },
@@ -165,8 +134,8 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
         };
 
         await fetch(entry.webhook_url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         }).catch(() => {});
       } catch {}
@@ -175,7 +144,7 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
 
     const executionTime = Date.now() - start;
     logQuery({
-      tool: "scheduled_reports",
+      tool: 'scheduled_reports',
       params,
       query: `add report ${id}`,
       execution_time_ms: executionTime,
@@ -194,12 +163,12 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
     );
   }
 
-  if (params.action === "remove") {
+  if (params.action === 'remove') {
     if (!params.report_id) {
       return wrapToolResponse(
-        { error: "report_id is required for remove action." },
+        { error: 'report_id is required for remove action.' },
         {
-          query: "remove report (validation failed)",
+          query: 'remove report (validation failed)',
           execution_time_ms: Date.now() - start,
           result_count: 0,
         },
@@ -214,7 +183,7 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
 
     const executionTime = Date.now() - start;
     logQuery({
-      tool: "scheduled_reports",
+      tool: 'scheduled_reports',
       params,
       query: `remove report ${params.report_id}`,
       execution_time_ms: executionTime,
@@ -223,9 +192,7 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
     return wrapToolResponse(
       {
         removed: deleted,
-        message: deleted
-          ? `Report ${params.report_id} removed.`
-          : `Report ${params.report_id} not found.`,
+        message: deleted ? `Report ${params.report_id} removed.` : `Report ${params.report_id} not found.`,
       },
       {
         query: `remove scheduled report ${params.report_id}`,
@@ -236,9 +203,9 @@ export async function manageScheduledReports(params: ScheduledReportInput) {
   }
 
   return wrapToolResponse(
-    { error: "Unknown action" },
+    { error: 'Unknown action' },
     {
-      query: "scheduled_reports",
+      query: 'scheduled_reports',
       execution_time_ms: Date.now() - start,
       result_count: 0,
     },

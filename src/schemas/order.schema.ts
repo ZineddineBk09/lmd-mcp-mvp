@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IOrderHistory {
   food_delivered?: Date;
@@ -34,8 +34,8 @@ const orderSchema = new Schema(
     country_code: String,
     main_city: String,
     sub_city: String,
-    driver_id: { type: Schema.Types.ObjectId, ref: "drivers" },
-    restaurant_id: { type: Schema.Types.ObjectId, ref: "restaurant" },
+    driver_id: { type: Schema.Types.ObjectId, ref: 'drivers' },
+    restaurant_id: { type: Schema.Types.ObjectId, ref: 'restaurant' },
     rejectedDriversList: [Schema.Types.ObjectId],
     order_history: {
       food_delivered: Date,
@@ -52,8 +52,7 @@ const orderSchema = new Schema(
     ept: Number,
     estimated_preparation_time: { type: Number, default: 0 },
   },
-  { timestamps: true, collection: "orders", strict: false },
+  { timestamps: true, collection: 'orders', strict: false },
 );
 
-export const Order =
-  mongoose.models.Order || mongoose.model<IOrder>("Order", orderSchema);
+export const Order = mongoose.models.Order || mongoose.model<IOrder>('Order', orderSchema);

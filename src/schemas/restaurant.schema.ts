@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IRestaurant extends Document {
   status: number;
@@ -32,9 +32,7 @@ const restaurantSchema = new Schema(
     },
     restaurantname: String,
   },
-  { collection: "restaurant", strict: false },
+  { collection: 'restaurant', strict: false },
 );
 
-export const Restaurant =
-  mongoose.models.Restaurant ||
-  mongoose.model<IRestaurant>("Restaurant", restaurantSchema);
+export const Restaurant = mongoose.models.Restaurant || mongoose.model<IRestaurant>('Restaurant', restaurantSchema);

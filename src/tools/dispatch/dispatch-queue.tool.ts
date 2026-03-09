@@ -1,23 +1,11 @@
-import { z } from "zod";
-import {
-  getConnectedRedis,
-  isRedisConfigured,
-  getRedisStatus,
-} from "../../connections/redis.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
+import { z } from 'zod';
+import { getConnectedRedis, isRedisConfigured, getRedisStatus } from '../../connections/redis.js';
+import { wrapToolResponse } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
 
 export const dispatchQueueSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. Country code to filter queue data."),
-  action: z
-    .enum(["status", "stuck", "stats"])
-    .default("status")
-    .describe(
-      "OPTIONAL. 'status' for queue overview, 'stuck' for orders waiting too long, 'stats' for queue depth history.",
-    ),
+  country_code: z.string().optional().describe('OPTIONAL. Country code to filter queue data.'),
+  action: z.enum(['status', 'stuck', 'stats']).default('status').describe("OPTIONAL. 'status' for queue overview, 'stuck' for orders waiting too long, 'stats' for queue depth history."),
 });
 
 export type DispatchQueueInput = z.infer<typeof dispatchQueueSchema>;
@@ -26,7 +14,7 @@ function redisUnavailableResponse(reason: string, startMs: number) {
   return wrapToolResponse(
     { error: reason, available: false },
     {
-      query: "redis connection check",
+      query: 'redis connection check',
       execution_time_ms: Date.now() - startMs,
       result_count: 0,
     },
@@ -37,31 +25,21 @@ export async function getDispatchQueue(params: DispatchQueueInput) {
   const start = Date.now();
 
   if (!isRedisConfigured()) {
-    return redisUnavailableResponse(
-      "Redis is not configured. Set REDIS_HOST in .env to enable dispatch queue monitoring.",
-      start,
-    );
+    return redisUnavailableResponse('Redis is not configured. Set REDIS_HOST in .env to enable dispatch queue monitoring.', start);
   }
 
   const redis = await getConnectedRedis();
 
   if (!redis) {
-    return redisUnavailableResponse(
-      `Redis is unreachable (status: ${getRedisStatus()}). Dispatch queue monitoring is temporarily unavailable.`,
-      start,
-    );
+    return redisUnavailableResponse(`Redis is unreachable (status: ${getRedisStatus()}). Dispatch queue monitoring is temporarily unavailable.`, start);
   }
 
   try {
-    const queueKey = "orderDispatchQueue";
-    const processingKey = "orderDispatchProcessing";
+    const queueKey = 'orderDispatchQueue';
+    const processingKey = 'orderDispatchProcessing';
 
-    if (params.action === "status") {
-      const [queueLen, processingLen, allQueued] = await Promise.all([
-        redis.llen(queueKey),
-        redis.llen(processingKey),
-        redis.lrange(queueKey, 0, 20),
-      ]);
+    if (params.action === 'status') {
+      const [queueLen, processingLen, allQueued] = await Promise.all([redis.llen(queueKey), redis.llen(processingKey), redis.lrange(queueKey, 0, 20)]);
 
       const parsedOrders = allQueued
         .map((item: string) => {
@@ -76,7 +54,7 @@ export async function getDispatchQueue(params: DispatchQueueInput) {
 
       const executionTime = Date.now() - start;
       logQuery({
-        tool: "dispatch_queue",
+        tool: 'dispatch_queue',
         params,
         query: `LLEN ${queueKey}, LLEN ${processingKey}, LRANGE ${queueKey} 0 20`,
         execution_time_ms: executionTime,
@@ -100,7 +78,7 @@ export async function getDispatchQueue(params: DispatchQueueInput) {
       );
     }
 
-    if (params.action === "stuck") {
+    if (params.action === 'stuck') {
       const allQueued = await redis.lrange(queueKey, 0, 100);
       const now = Date.now();
       const stuckThresholdMs = 300_000;
@@ -113,31 +91,21 @@ export async function getDispatchQueue(params: DispatchQueueInput) {
             return null;
           }
         })
-        .filter(
-          (
-            order: Record<string, unknown> | null,
-          ): order is Record<string, unknown> => {
-            if (!order) return false;
-            const createdAt =
-              order.createdAt || order.created_at || order.timestamp;
-            if (!createdAt) return false;
-            return (
-              now - new Date(createdAt as string).getTime() > stuckThresholdMs
-            );
-          },
-        )
+        .filter((order: Record<string, unknown> | null): order is Record<string, unknown> => {
+          if (!order) return false;
+          const createdAt = order.createdAt || order.created_at || order.timestamp;
+          if (!createdAt) return false;
+          return now - new Date(createdAt as string).getTime() > stuckThresholdMs;
+        })
         .map((order: Record<string, unknown>) => {
-          const createdAt =
-            order.createdAt || order.created_at || order.timestamp;
-          const ageMinutes = Math.round(
-            (now - new Date(createdAt as string).getTime()) / 60000,
-          );
+          const createdAt = order.createdAt || order.created_at || order.timestamp;
+          const ageMinutes = Math.round((now - new Date(createdAt as string).getTime()) / 60000);
           return { ...order, stuck_minutes: ageMinutes };
         });
 
       const executionTime = Date.now() - start;
       logQuery({
-        tool: "dispatch_queue",
+        tool: 'dispatch_queue',
         params,
         query: `LRANGE ${queueKey} 0 100 (stuck filter)`,
         execution_time_ms: executionTime,
@@ -160,14 +128,11 @@ export async function getDispatchQueue(params: DispatchQueueInput) {
       );
     }
 
-    const [queueLen, processingLen] = await Promise.all([
-      redis.llen(queueKey),
-      redis.llen(processingKey),
-    ]);
+    const [queueLen, processingLen] = await Promise.all([redis.llen(queueKey), redis.llen(processingKey)]);
 
     const executionTime = Date.now() - start;
     logQuery({
-      tool: "dispatch_queue",
+      tool: 'dispatch_queue',
       params,
       query: `LLEN ${queueKey}, LLEN ${processingKey}`,
       execution_time_ms: executionTime,
@@ -192,7 +157,7 @@ export async function getDispatchQueue(params: DispatchQueueInput) {
     return wrapToolResponse(
       { error: `Redis query failed: ${msg}`, available: false },
       {
-        query: "redis error",
+        query: 'redis error',
         execution_time_ms: Date.now() - start,
         result_count: 0,
       },

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ICity extends Document {
   auto_dispatch: boolean;
@@ -28,7 +28,7 @@ const citySchema = new Schema(
     dispatch_delay_time: Number,
     max_dispatch_time: Number,
     max_rejected_drivers: Number,
-    auto_dispatch_algorithm: { type: String, default: "normal" },
+    auto_dispatch_algorithm: { type: String, default: 'normal' },
     driver_radius: { type: Number, default: 20 },
     max_orders: Number,
     timer_config: {
@@ -44,8 +44,7 @@ const citySchema = new Schema(
     cityname: String,
     state: String,
   },
-  { collection: "cities", strict: false },
+  { collection: 'cities', strict: false },
 );
 
-export const City =
-  mongoose.models.City || mongoose.model<ICity>("City", citySchema);
+export const City = mongoose.models.City || mongoose.model<ICity>('City', citySchema);

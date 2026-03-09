@@ -1,28 +1,15 @@
-import { z } from "zod";
-import mongoose from "mongoose";
-import { Restaurant } from "../../schemas/restaurant.schema.js";
-import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
-import {
-  ORDER_STATUS_LABELS,
-  ACTIVE_ORDER_STATUSES,
-} from "../../constants/order-status.js";
-import { getCurrencyForCountry } from "../../utils/currency.js";
+import { z } from 'zod';
+import mongoose from 'mongoose';
+import { Restaurant } from '../../schemas/restaurant.schema.js';
+import { Order } from '../../schemas/order.schema.js';
+import { wrapToolResponse } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
+import { ORDER_STATUS_LABELS, ACTIVE_ORDER_STATUSES } from '../../constants/order-status.js';
+import { getCurrencyForCountry } from '../../utils/currency.js';
 
 export const lookupRestaurantSchema = z.object({
-  restaurant_id: z
-    .string()
-    .optional()
-    .describe(
-      "MongoDB _id of the restaurant. Provide exactly one of restaurant_id or name.",
-    ),
-  name: z
-    .string()
-    .optional()
-    .describe(
-      "Restaurant name (partial match, case-insensitive). Provide exactly one of restaurant_id or name.",
-    ),
+  restaurant_id: z.string().optional().describe('MongoDB _id of the restaurant. Provide exactly one of restaurant_id or name.'),
+  name: z.string().optional().describe('Restaurant name (partial match, case-insensitive). Provide exactly one of restaurant_id or name.'),
 });
 
 export type LookupRestaurantInput = z.infer<typeof lookupRestaurantSchema>;
@@ -31,10 +18,7 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
   const start = Date.now();
 
   if (!params.restaurant_id && !params.name) {
-    return wrapToolResponse(
-      { error: "Provide at least one of: restaurant_id or name." },
-      { query: "N/A", execution_time_ms: 0, result_count: 0 },
-    );
+    return wrapToolResponse({ error: 'Provide at least one of: restaurant_id or name.' }, { query: 'N/A', execution_time_ms: 0, result_count: 0 });
   }
 
   const filter: Record<string, unknown> = {};
@@ -42,13 +26,10 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
     try {
       filter._id = new mongoose.Types.ObjectId(params.restaurant_id);
     } catch {
-      return wrapToolResponse(
-        { error: `Invalid restaurant_id format: "${params.restaurant_id}"` },
-        { query: "N/A", execution_time_ms: 0, result_count: 0 },
-      );
+      return wrapToolResponse({ error: `Invalid restaurant_id format: "${params.restaurant_id}"` }, { query: 'N/A', execution_time_ms: 0, result_count: 0 });
     }
   } else if (params.name) {
-    filter.restaurantname = { $regex: params.name, $options: "i" };
+    filter.restaurantname = { $regex: params.name, $options: 'i' };
   }
 
   const restaurants = await Restaurant.find(filter)
@@ -70,58 +51,52 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const allIds = restaurants.map(
-    (r) => (r as Record<string, unknown>)._id as mongoose.Types.ObjectId,
-  );
+  const allIds = restaurants.map((r) => (r as Record<string, unknown>)._id as mongoose.Types.ObjectId);
 
   // Batch: single aggregation for today's stats across all restaurants
   // Batch: single query for active orders across all restaurants
   // Batch: single count for food items across all restaurants
-  const [activeOrdersBatch, todayStatsBatch, menuCountsBatch] =
-    await Promise.all([
-      Order.find(
-        {
+  const [activeOrdersBatch, todayStatsBatch, menuCountsBatch] = await Promise.all([
+    Order.find(
+      {
+        restaurant_id: { $in: allIds },
+        status: { $in: ACTIVE_ORDER_STATUSES },
+      },
+      { _id: 1, status: 1, createdAt: 1, restaurant_id: 1 },
+    )
+      .sort({ createdAt: -1 })
+      .lean(),
+
+    Order.aggregate([
+      {
+        $match: {
           restaurant_id: { $in: allIds },
-          status: { $in: ACTIVE_ORDER_STATUSES },
+          createdAt: { $gte: todayStart },
         },
-        { _id: 1, status: 1, createdAt: 1, restaurant_id: 1 },
-      )
-        .sort({ createdAt: -1 })
-        .lean(),
-
-      Order.aggregate([
-        {
-          $match: {
-            restaurant_id: { $in: allIds },
-            createdAt: { $gte: todayStart },
+      },
+      {
+        $group: {
+          _id: '$restaurant_id',
+          total: { $sum: 1 },
+          delivered: { $sum: { $cond: [{ $eq: ['$status', 7] }, 1, 0] } },
+          rejected_by_restaurant: {
+            $sum: { $cond: [{ $eq: ['$status', 2] }, 1, 0] },
           },
-        },
-        {
-          $group: {
-            _id: "$restaurant_id",
-            total: { $sum: 1 },
-            delivered: { $sum: { $cond: [{ $eq: ["$status", 7] }, 1, 0] } },
-            rejected_by_restaurant: {
-              $sum: { $cond: [{ $eq: ["$status", 2] }, 1, 0] },
-            },
-            cancelled: {
-              $sum: { $cond: [{ $in: ["$status", [9, 10, 90]] }, 1, 0] },
-            },
-            timed_out: { $sum: { $cond: [{ $eq: ["$status", 11] }, 1, 0] } },
+          cancelled: {
+            $sum: { $cond: [{ $in: ['$status', [9, 10, 90]] }, 1, 0] },
           },
+          timed_out: { $sum: { $cond: [{ $eq: ['$status', 11] }, 1, 0] } },
         },
-      ]),
+      },
+    ]),
 
-      mongoose.connection.db
-        ? mongoose.connection.db
-            .collection("food")
-            .aggregate([
-              { $match: { restaurant_id: { $in: allIds } } },
-              { $group: { _id: "$restaurant_id", count: { $sum: 1 } } },
-            ])
-            .toArray()
-        : [],
-    ]);
+    mongoose.connection.db
+      ? mongoose.connection.db
+          .collection('food')
+          .aggregate([{ $match: { restaurant_id: { $in: allIds } } }, { $group: { _id: '$restaurant_id', count: { $sum: 1 } } }])
+          .toArray()
+      : [],
+  ]);
 
   const activeByRestaurant = new Map<string, Array<Record<string, unknown>>>();
   for (const order of activeOrdersBatch) {
@@ -145,9 +120,7 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
       const raw = doc as Record<string, unknown>;
       const restId = raw._id as mongoose.Types.ObjectId;
       const restIdStr = String(restId);
-      const availability = raw.restaurantAvailability as
-        | Record<string, unknown>
-        | undefined;
+      const availability = raw.restaurantAvailability as Record<string, unknown> | undefined;
       const address = raw.address as Record<string, unknown> | undefined;
       const restPhone = (raw.phone ?? {}) as Record<string, unknown>;
 
@@ -161,24 +134,15 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
       };
       const menuCount = menuByRestaurant.get(restIdStr) ?? 0;
 
-      const acceptRate =
-        stats.total > 0
-          ? Math.round(
-              ((stats.total - stats.rejected_by_restaurant) / stats.total) *
-                100,
-            )
-          : null;
+      const acceptRate = stats.total > 0 ? Math.round(((stats.total - stats.rejected_by_restaurant) / stats.total) * 100) : null;
 
       const isBusy = availability?.isBusy ?? false;
       const busyUntil = availability?.busyUntil ?? null;
       const isPostRejection = availability?.isPostRejection ?? false;
 
-      let statusLabel = "online";
-      if (raw.status === 0) statusLabel = "disabled";
-      else if (isBusy)
-        statusLabel = isPostRejection
-          ? "auto-busy (rejections)"
-          : "manually busy";
+      let statusLabel = 'online';
+      if (raw.status === 0) statusLabel = 'disabled';
+      else if (isBusy) statusLabel = isPostRejection ? 'auto-busy (rejections)' : 'manually busy';
 
       const cc = (address?.country_code as string) ?? null;
       const cur = cc ? await getCurrencyForCountry(cc) : null;
@@ -187,10 +151,7 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
         restaurant_id: restIdStr,
         name: raw.restaurantname ?? null,
         email: raw.email ?? null,
-        phone:
-          restPhone.code && restPhone.number
-            ? `${restPhone.code}${restPhone.number}`
-            : null,
+        phone: restPhone.code && restPhone.number ? `${restPhone.code}${restPhone.number}` : null,
         status: raw.status,
         availability_label: statusLabel,
         is_busy: isBusy,
@@ -219,8 +180,7 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
         active_orders: activeOrders.slice(0, 5).map((o) => ({
           _id: String(o._id),
           status: o.status,
-          status_label:
-            ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
+          status_label: ORDER_STATUS_LABELS[o.status as number] ?? `Unknown(${o.status})`,
           created_at: o.createdAt,
         })),
         today_stats: {
@@ -231,29 +191,24 @@ export async function lookupRestaurant(params: LookupRestaurantInput) {
           timed_out: stats.timed_out,
           acceptance_rate_pct: acceptRate,
         },
-        summary: `${raw.restaurantname ?? "?"} — ${statusLabel}. Today: ${stats.total} orders (${stats.delivered} delivered, ${stats.rejected_by_restaurant} rejected). ${activeOrders.length} active now. ${menuCount} menu items.`,
+        summary: `${raw.restaurantname ?? '?'} — ${statusLabel}. Today: ${stats.total} orders (${stats.delivered} delivered, ${stats.rejected_by_restaurant} rejected). ${activeOrders.length} active now. ${menuCount} menu items.`,
       };
     }),
   );
 
   const executionTime = Date.now() - start;
   logQuery({
-    tool: "lookup_restaurant",
+    tool: 'lookup_restaurant',
     params,
     query: `db.restaurant.find(${JSON.stringify(filter)}) (batched)`,
     execution_time_ms: executionTime,
     result_count: results.length,
   });
 
-  return wrapToolResponse(
-    results.length === 1
-      ? results[0]
-      : { restaurants: results, count: results.length },
-    {
-      query: `db.restaurant.find(...) + batched orders/food queries`,
-      collection: "restaurant",
-      execution_time_ms: executionTime,
-      result_count: results.length,
-    },
-  );
+  return wrapToolResponse(results.length === 1 ? results[0] : { restaurants: results, count: results.length }, {
+    query: `db.restaurant.find(...) + batched orders/food queries`,
+    collection: 'restaurant',
+    execution_time_ms: executionTime,
+    result_count: results.length,
+  });
 }

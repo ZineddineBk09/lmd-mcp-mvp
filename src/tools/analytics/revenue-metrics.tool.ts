@@ -1,27 +1,15 @@
-import { z } from "zod";
-import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
-import { cacheGet, cacheSet, buildCacheKey } from "../../utils/cache.js";
-import {
-  getCurrencyForCountry,
-  getAllCurrencies,
-} from "../../utils/currency.js";
+import { z } from 'zod';
+import { Order } from '../../schemas/order.schema.js';
+import { wrapToolResponse, formatAggregation } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
+import { cacheGet, cacheSet, buildCacheKey } from '../../utils/cache.js';
+import { getCurrencyForCountry, getAllCurrencies } from '../../utils/currency.js';
 
 export const revenueMetricsSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. Country code filter."),
-  city: z.string().optional().describe("OPTIONAL. City name filter."),
-  since_hours: z
-    .number()
-    .default(24)
-    .describe("OPTIONAL. Time window in hours (default 24)."),
-  group_by: z
-    .enum(["city", "country", "hour"])
-    .optional()
-    .describe("OPTIONAL. Group results by city, country, or hour."),
+  country_code: z.string().optional().describe('OPTIONAL. Country code filter.'),
+  city: z.string().optional().describe('OPTIONAL. City name filter.'),
+  since_hours: z.number().default(24).describe('OPTIONAL. Time window in hours (default 24).'),
+  group_by: z.enum(['city', 'country', 'hour']).optional().describe('OPTIONAL. Group results by city, country, or hour.'),
 });
 
 export type RevenueMetricsInput = z.infer<typeof revenueMetricsSchema>;
@@ -29,12 +17,8 @@ export type RevenueMetricsInput = z.infer<typeof revenueMetricsSchema>;
 const CACHE_TTL_MS = 60_000;
 
 export async function getRevenueMetrics(params: RevenueMetricsInput) {
-  const cacheKey = buildCacheKey(
-    "revenue_metrics",
-    params as Record<string, unknown>,
-  );
-  const cached =
-    cacheGet<Awaited<ReturnType<typeof wrapToolResponse>>>(cacheKey);
+  const cacheKey = buildCacheKey('revenue_metrics', params as Record<string, unknown>);
+  const cached = cacheGet<Awaited<ReturnType<typeof wrapToolResponse>>>(cacheKey);
   if (cached) return cached;
 
   const start = Date.now();
@@ -47,13 +31,7 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
   if (params.country_code) match.country_code = params.country_code;
   if (params.city) match.main_city = params.city;
 
-  const groupId = params.group_by
-    ? params.group_by === "city"
-      ? "$main_city"
-      : params.group_by === "country"
-        ? "$country_code"
-        : { $hour: "$createdAt" }
-    : null;
+  const groupId = params.group_by ? (params.group_by === 'city' ? '$main_city' : params.group_by === 'country' ? '$country_code' : { $hour: '$createdAt' }) : null;
 
   const pipeline: Record<string, unknown>[] = [
     { $match: match },
@@ -61,13 +39,13 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
       $group: {
         _id: groupId,
         total_revenue: {
-          $sum: { $ifNull: ["$billings.amount.grand_total", 0] },
+          $sum: { $ifNull: ['$billings.amount.grand_total', 0] },
         },
         total_delivery_fees: {
-          $sum: { $ifNull: ["$billings.amount.delivery_amount", 0] },
+          $sum: { $ifNull: ['$billings.amount.delivery_amount', 0] },
         },
         avg_basket_size: {
-          $avg: { $ifNull: ["$billings.amount.grand_total", 0] },
+          $avg: { $ifNull: ['$billings.amount.grand_total', 0] },
         },
         order_count: { $sum: 1 },
       },
@@ -77,7 +55,7 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
 
   const results = await Order.aggregate(pipeline as never[]);
 
-  const KNOWN_COUNTRIES = ["DZ", "MA", "TN", "FR", "ZA", "SN"];
+  const KNOWN_COUNTRIES = ['DZ', 'MA', 'TN', 'FR', 'ZA', 'SN'];
   const ZERO_ROW = {
     total_revenue: 0,
     total_delivery_fees: 0,
@@ -85,18 +63,13 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
     order_count: 0,
   };
 
-  const isGroupedByCountry = params.group_by === "country";
+  const isGroupedByCountry = params.group_by === 'country';
   const currencyMap = isGroupedByCountry ? await getAllCurrencies() : null;
-  const singleCurrency = params.country_code
-    ? await getCurrencyForCountry(params.country_code)
-    : null;
+  const singleCurrency = params.country_code ? await getCurrencyForCountry(params.country_code) : null;
 
   let rows = results.map((r) => {
-    const dim = r._id ?? "total";
-    const cur =
-      isGroupedByCountry && currencyMap
-        ? currencyMap[dim as string]
-        : singleCurrency;
+    const dim = r._id ?? 'total';
+    const cur = isGroupedByCountry && currencyMap ? currencyMap[dim as string] : singleCurrency;
     return {
       dimension: dim,
       total_revenue: Math.round((r.total_revenue ?? 0) * 100) / 100,
@@ -129,9 +102,7 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
         });
       }
     }
-    rows = rows.sort((a, b) =>
-      String(a.dimension).localeCompare(String(b.dimension)),
-    );
+    rows = rows.sort((a, b) => String(a.dimension).localeCompare(String(b.dimension)));
   }
 
   const totalOrders = rows.reduce((s, r) => s + r.order_count, 0);
@@ -141,26 +112,23 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
   if (isMultiCurrency) {
     const perCountry = rows
       .filter((r) => r.order_count > 0)
-      .map(
-        (r) =>
-          `${r.dimension}: ${r.total_revenue.toFixed(2)} ${(r as Record<string, unknown>).currency_code ?? ""}`,
-      )
-      .join(", ");
-    summary = `Revenue metrics (last ${params.since_hours}h) grouped by country: ${totalOrders} delivered orders. ${perCountry || "No revenue data."}. NOTE: values are in local currencies and cannot be summed across countries.`;
+      .map((r) => `${r.dimension}: ${r.total_revenue.toFixed(2)} ${(r as Record<string, unknown>).currency_code ?? ''}`)
+      .join(', ');
+    summary = `Revenue metrics (last ${params.since_hours}h) grouped by country: ${totalOrders} delivered orders. ${perCountry || 'No revenue data.'}. NOTE: values are in local currencies and cannot be summed across countries.`;
   } else {
     const totalRevenue = rows.reduce((s, r) => s + r.total_revenue, 0);
     const totalFees = rows.reduce((s, r) => s + r.total_delivery_fees, 0);
     const avgBasket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const sym = singleCurrency?.currency_symbol ?? "";
+    const sym = singleCurrency?.currency_symbol ?? '';
     summary =
-      `Revenue metrics (last ${params.since_hours}h${params.country_code ? `, ${params.country_code}` : ""}${params.city ? `, ${params.city}` : ""}): ${totalOrders} delivered orders, GMV ${totalRevenue.toFixed(2)} ${sym}, delivery fees ${totalFees.toFixed(2)} ${sym}, avg basket ${avgBasket.toFixed(2)} ${sym}${params.group_by ? ` grouped by ${params.group_by}` : ""}.`.trim();
+      `Revenue metrics (last ${params.since_hours}h${params.country_code ? `, ${params.country_code}` : ''}${params.city ? `, ${params.city}` : ''}): ${totalOrders} delivered orders, GMV ${totalRevenue.toFixed(2)} ${sym}, delivery fees ${totalFees.toFixed(2)} ${sym}, avg basket ${avgBasket.toFixed(2)} ${sym}${params.group_by ? ` grouped by ${params.group_by}` : ''}.`.trim();
   }
 
   const executionTime = Date.now() - start;
   logQuery({
-    tool: "revenue_metrics",
+    tool: 'revenue_metrics',
     params,
-    query: formatAggregation("orders", pipeline),
+    query: formatAggregation('orders', pipeline),
     execution_time_ms: executionTime,
     result_count: rows.length,
   });
@@ -193,8 +161,8 @@ export async function getRevenueMetrics(params: RevenueMetricsInput) {
   }
 
   const response = wrapToolResponse(responsePayload, {
-    query: formatAggregation("orders", pipeline),
-    collection: "orders",
+    query: formatAggregation('orders', pipeline),
+    collection: 'orders',
     execution_time_ms: executionTime,
     result_count: rows.length,
   });

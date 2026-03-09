@@ -1,32 +1,15 @@
-import { z } from "zod";
-import { Order } from "../../schemas/order.schema.js";
-import { wrapToolResponse, formatAggregation } from "../../utils/fact-check.js";
-import { logQuery } from "../../utils/query-logger.js";
-import {
-  ORDER_STATUS,
-  ORDER_STATUS_LABELS,
-} from "../../constants/order-status.js";
+import { z } from 'zod';
+import { Order } from '../../schemas/order.schema.js';
+import { wrapToolResponse, formatAggregation } from '../../utils/fact-check.js';
+import { logQuery } from '../../utils/query-logger.js';
+import { ORDER_STATUS, ORDER_STATUS_LABELS } from '../../constants/order-status.js';
 
 export const needsAttentionSchema = z.object({
-  country_code: z
-    .string()
-    .optional()
-    .describe(
-      "OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.",
-    ),
-  city: z
-    .string()
-    .optional()
-    .describe("OPTIONAL. City name. Omit for entire country."),
-  unassigned_threshold_minutes: z
-    .number()
-    .default(5)
-    .describe("OPTIONAL. Minutes threshold for unassigned orders (default 5)."),
-  pickup_threshold_minutes: z
-    .number()
-    .default(20)
-    .describe("OPTIONAL. Minutes threshold for pickup delay (default 20)."),
-  limit: z.number().default(30).describe("OPTIONAL. Max results (default 30)."),
+  country_code: z.string().optional().describe('OPTIONAL. Country code: DZ, MA, TN, or CI. Omit to search all countries.'),
+  city: z.string().optional().describe('OPTIONAL. City name. Omit for entire country.'),
+  unassigned_threshold_minutes: z.number().default(5).describe('OPTIONAL. Minutes threshold for unassigned orders (default 5).'),
+  pickup_threshold_minutes: z.number().default(20).describe('OPTIONAL. Minutes threshold for pickup delay (default 20).'),
+  limit: z.number().default(30).describe('OPTIONAL. Max results (default 30).'),
 });
 
 export type NeedsAttentionInput = z.infer<typeof needsAttentionSchema>;
@@ -36,12 +19,7 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
 
   const baseMatch: Record<string, unknown> = {
     status: {
-      $in: [
-        ORDER_STATUS.RESTAURANT_ACCEPTED,
-        ORDER_STATUS.DRIVER_REJECTED,
-        ORDER_STATUS.DRIVER_ACCEPTED,
-        ORDER_STATUS.DRIVER_AT_RESTAURANT,
-      ],
+      $in: [ORDER_STATUS.RESTAURANT_ACCEPTED, ORDER_STATUS.DRIVER_REJECTED, ORDER_STATUS.DRIVER_ACCEPTED, ORDER_STATUS.DRIVER_AT_RESTAURANT],
     },
   };
   if (params.country_code) baseMatch.country_code = params.country_code;
@@ -55,17 +33,13 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
       $addFields: {
         minutes_waiting: {
           $dateDiff: {
-            startDate: "$createdAt",
-            endDate: "$$NOW",
-            unit: "minute",
+            startDate: '$createdAt',
+            endDate: '$$NOW',
+            unit: 'minute',
           },
         },
         has_driver: {
-          $cond: [
-            { $ifNull: ["$order_history.driver_accepted", false] },
-            true,
-            false,
-          ],
+          $cond: [{ $ifNull: ['$order_history.driver_accepted', false] }, true, false],
         },
       },
     },
@@ -96,27 +70,19 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
     {
       $addFields: {
         has_driver: {
-          $cond: [
-            { $ifNull: ["$order_history.driver_accepted", false] },
-            true,
-            false,
-          ],
+          $cond: [{ $ifNull: ['$order_history.driver_accepted', false] }, true, false],
         },
         has_pickup: {
-          $cond: [
-            { $ifNull: ["$order_history.driver_pickedup", false] },
-            true,
-            false,
-          ],
+          $cond: [{ $ifNull: ['$order_history.driver_pickedup', false] }, true, false],
         },
         minutes_since_accept: {
           $cond: [
-            { $ifNull: ["$order_history.driver_accepted", false] },
+            { $ifNull: ['$order_history.driver_accepted', false] },
             {
               $dateDiff: {
-                startDate: "$order_history.driver_accepted",
-                endDate: "$$NOW",
-                unit: "minute",
+                startDate: '$order_history.driver_accepted',
+                endDate: '$$NOW',
+                unit: 'minute',
               },
             },
             0,
@@ -148,17 +114,14 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
     { $limit: params.limit },
   ];
 
-  const [unassigned, pickupDelayed] = await Promise.all([
-    Order.aggregate(unassignedPipeline),
-    Order.aggregate(pickupDelayPipeline),
-  ]);
+  const [unassigned, pickupDelayed] = await Promise.all([Order.aggregate(unassignedPipeline), Order.aggregate(pickupDelayPipeline)]);
 
   const executionTime = Date.now() - start;
 
   logQuery({
-    tool: "get_needs_attention",
+    tool: 'get_needs_attention',
     params,
-    query: formatAggregation("orders", unassignedPipeline),
+    query: formatAggregation('orders', unassignedPipeline),
     execution_time_ms: executionTime,
     result_count: unassigned.length + pickupDelayed.length,
   });
@@ -192,11 +155,11 @@ export async function getNeedsAttention(params: NeedsAttentionInput) {
         unassigned_minutes: params.unassigned_threshold_minutes,
         pickup_minutes: params.pickup_threshold_minutes,
       },
-      summary: `${unassigned.length + pickupDelayed.length} orders need attention in ${params.country_code}${params.city ? ` / ${params.city}` : ""}: ${unassigned.length} unassigned (>${params.unassigned_threshold_minutes} min), ${pickupDelayed.length} pickup delayed (>${params.pickup_threshold_minutes} min).`,
+      summary: `${unassigned.length + pickupDelayed.length} orders need attention in ${params.country_code}${params.city ? ` / ${params.city}` : ''}: ${unassigned.length} unassigned (>${params.unassigned_threshold_minutes} min), ${pickupDelayed.length} pickup delayed (>${params.pickup_threshold_minutes} min).`,
     },
     {
-      query: formatAggregation("orders", unassignedPipeline),
-      collection: "orders",
+      query: formatAggregation('orders', unassignedPipeline),
+      collection: 'orders',
       execution_time_ms: executionTime,
       result_count: unassigned.length + pickupDelayed.length,
     },

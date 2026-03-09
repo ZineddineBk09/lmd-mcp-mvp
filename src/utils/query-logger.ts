@@ -10,7 +10,7 @@ interface QueryLogEntry {
 const queryLog: QueryLogEntry[] = [];
 const MAX_LOG_SIZE = 500;
 
-export function logQuery(entry: Omit<QueryLogEntry, "timestamp">): void {
+export function logQuery(entry: Omit<QueryLogEntry, 'timestamp'>): void {
   queryLog.push({
     ...entry,
     timestamp: new Date().toISOString(),
