@@ -328,7 +328,7 @@ async function main() {
     try {
       const authCtx = await resolveAuthContext(req);
 
-      const tools = getOpenAITools(authCtx?.privileges);
+      const tools = getOpenAITools(authCtx?.privileges, authCtx?.role);
       const filteredCount = tools.length;
 
       const systemPrompt = buildSystemPrompt({

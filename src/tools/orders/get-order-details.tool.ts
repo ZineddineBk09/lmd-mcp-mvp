@@ -348,10 +348,10 @@ export async function getOrderDetailsHandler(params: GetOrderDetailsParams, ctx?
       summary,
       order: result,
       display_hint:
-        "IMPORTANT: Display the FULL order object using structured markdown. " +
-        "Show ALL sections: customer, delivery address, restaurant, driver, items (as table), " +
-        "cost breakdown (as table with each fee row), payment, payouts, and flags. " +
-        "Do NOT just show the summary — show every detail available in the order object.",
+        'IMPORTANT: Display the FULL order object using structured markdown. ' +
+        'Show ALL sections: customer, delivery address, restaurant, driver, items (as table), ' +
+        'cost breakdown (as table with each fee row), payment, payouts, and flags. ' +
+        'Do NOT just show the summary — show every detail available in the order object.',
     },
     _debug: {
       query: `API POST /get/order-details { id: "${params.id}" }`,

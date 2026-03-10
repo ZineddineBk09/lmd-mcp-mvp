@@ -14,13 +14,13 @@ for (const tool of TOOL_DEFINITIONS) {
 
 /**
  * Get OpenAI function-calling tool definitions.
- * If privileges are provided, only tools the user has permission for are returned.
+ * Admin role gets all tools. Subadmins are filtered by privileges.
  */
-export function getOpenAITools(privileges?: UserPrivilege[]): ChatCompletionTool[] {
+export function getOpenAITools(privileges?: UserPrivilege[], role?: string): ChatCompletionTool[] {
   let tools: ToolDefinition[] = TOOL_DEFINITIONS;
 
   if (privileges) {
-    tools = filterToolsByPermissions(TOOL_DEFINITIONS, privileges);
+    tools = filterToolsByPermissions(TOOL_DEFINITIONS, privileges, role);
   }
 
   return tools.map((t) => ({
@@ -120,7 +120,7 @@ export async function executeTool(name: string, args: unknown, ctx?: AuthContext
   if (!handler) return { text: JSON.stringify({ error: `Unknown tool: ${name}` }) };
 
   if (ctx) {
-    const missing = getMissingPermission(name, ctx.privileges);
+    const missing = getMissingPermission(name, ctx.privileges, ctx.role);
     if (missing) {
       return {
         text: JSON.stringify({
@@ -186,7 +186,7 @@ export function getToolCount(): number {
   return TOOL_DEFINITIONS.length;
 }
 
-export function getFilteredToolCount(privileges?: UserPrivilege[]): number {
+export function getFilteredToolCount(privileges?: UserPrivilege[], role?: string): number {
   if (!privileges) return TOOL_DEFINITIONS.length;
-  return filterToolsByPermissions(TOOL_DEFINITIONS, privileges).length;
+  return filterToolsByPermissions(TOOL_DEFINITIONS, privileges, role).length;
 }

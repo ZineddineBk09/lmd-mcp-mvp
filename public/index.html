@@ -195,7 +195,6 @@ select:focus{border-color:var(--primary)}
     <div class="sidebar-section">
       <h3>Country Focus</h3>
       <select id="countrySelect" style="width:100%">
-        <option value="ALL">All Countries</option>
         <option value="DZ">Algeria (DZ)</option>
         <option value="MA">Morocco (MA)</option>
         <option value="TN">Tunisia (TN)</option>
@@ -287,21 +286,23 @@ select:focus{border-color:var(--primary)}
 
 <script>
 const QUICK_ACTIONS = [
-  { label: "Active Orders", prompt: "How many active orders do we have right now?" },
-  { label: "Fleet Status", prompt: "Give me the current fleet status" },
-  { label: "Needs Attention", prompt: "Which orders need urgent attention?" },
+  { label: "Active Orders", prompt: "How many active orders do we have right now? Break down by country." },
+  { label: "Needs Attention", prompt: "Which orders need urgent attention right now?" },
   { label: "Shift Report", prompt: "Generate a shift report for today" },
-  { label: "Supply & Demand", prompt: "What's the supply and demand balance?" },
+  { label: "Today vs Yesterday", prompt: "Compare today's orders, revenue, and delivery rate vs yesterday by country" },
+  { label: "Platform Earnings", prompt: "Show me today's platform earnings" },
+  { label: "Driver Payouts", prompt: "List the latest billing cycles for Algiers" },
+  { label: "Restaurant Cycles", prompt: "Show restaurant payout cycles for Algiers" },
+  { label: "Fleet Status", prompt: "Give me the current fleet status across all countries" },
+  { label: "Top Restaurants", prompt: "Top 10 restaurants by orders today" },
   { label: "Anomalies", prompt: "Are there any anomalies right now?" },
-  { label: "Top Restaurants", prompt: "Top 5 restaurants by orders today" },
-  { label: "Today vs Yesterday", prompt: "Compare today's orders vs yesterday" },
 ];
 
 const WELCOME_CARDS = [
-  { emoji: "\u{1F4E6}", title: "Order Intelligence", desc: "Track orders, investigate issues, SLA breaches", prompt: "How many active orders right now?" },
-  { emoji: "\u{1F697}", title: "Fleet Overview", desc: "Driver status, ghost detection, capacity", prompt: "What's the current fleet status?" },
-  { emoji: "\u{1F37D}", title: "Restaurant Health", desc: "Performance, rejections, auto-busy risks", prompt: "Show me restaurant health overview" },
-  { emoji: "\u{1F4CA}", title: "Analytics & Trends", desc: "Compare periods, rankings, anomaly detection", prompt: "Compare today vs yesterday" },
+  { emoji: "\u{1F4E6}", title: "Orders & Operations", desc: "Active orders, SLA breaches, stuck orders, accept/reject/cancel", prompt: "How many active orders right now? Any needing attention?" },
+  { emoji: "\u{1F4B0}", title: "Finance & Earnings", desc: "Platform earnings, driver payouts, restaurant cycles, OFSE", prompt: "Show me today's platform earnings breakdown" },
+  { emoji: "\u{1F697}", title: "Fleet & Drivers", desc: "Fleet status, ghost drivers, supply vs demand, driver lookup", prompt: "What's the current fleet status and supply-demand balance?" },
+  { emoji: "\u{1F4CA}", title: "Analytics & Trends", desc: "Period comparisons, rankings, revenue, anomaly detection", prompt: "Compare today's performance vs yesterday by country" },
 ];
 
 let chatHistory = [];
@@ -519,7 +520,7 @@ function init() {
   });
 
   const savedCountry = localStorage.getItem("countryFocus");
-  if (savedCountry) $("countrySelect").value = savedCountry;
+  $("countrySelect").value = savedCountry && savedCountry !== "ALL" ? savedCountry : "DZ";
   $("countrySelect").addEventListener("change", () => {
     localStorage.setItem("countryFocus", $("countrySelect").value);
   });
@@ -761,11 +762,16 @@ function renderConfirmationBar(data) {
       confirmArgs.reason_number = parseInt(sel.value, 10);
       const opt = sel.options[sel.selectedIndex];
       const type = opt?.dataset.type;
-      if ((type === "custom_other" || type === "custom_return") && customInput?.value?.trim()) {
+      if (type === "custom_other" || type === "custom_return") {
+        if (!customInput?.value?.trim()) {
+          customInput.style.borderColor = "var(--accent)";
+          customInput.focus();
+          customInput.setAttribute("placeholder", "⚠ Custom reason is required");
+          return;
+        }
         confirmArgs.reason = customInput.value.trim();
       }
     } else if (reasons && reasons.length > 0) {
-      // Reason required but not selected
       sel.style.borderColor = "var(--accent)";
       sel.focus();
       return;
@@ -866,9 +872,7 @@ async function sendMessage() {
 
   const reqHeaders = { "Content-Type": "application/json" };
   const countryCode = $("countrySelect").value;
-  if (countryCode && countryCode !== "ALL") {
-    reqHeaders["country-code"] = countryCode;
-  }
+  reqHeaders["country-code"] = countryCode;
   const authToken = localStorage.getItem("authToken");
   if (authToken) {
     reqHeaders["authorization"] = authToken;

@@ -56,6 +56,14 @@ export const TOOL_PERMISSION_MAP: Record<string, PermissionRequirement | null> =
   scheduled_reports: { alias: 'dashboard', action: 'view' },
   set_alert: { alias: 'dashboard', action: 'view' },
 
+  // ── Finance / Earnings tools ────────────────────────────────────
+  get_admin_earnings: { alias: 'siteearnings', action: 'view' },
+  list_billing_cycles: { alias: 'siteearnings', action: 'view' },
+  get_driver_payouts: { alias: 'siteearnings', action: 'view' },
+  get_driver_payout_details: { alias: 'siteearnings', action: 'view' },
+  list_restaurant_cycles: { alias: 'siteearnings', action: 'view' },
+  get_restaurant_cycle_orders: { alias: 'siteearnings', action: 'view' },
+
   // ── General exploration tools (available to all authenticated) ───
   flexible_query: null,
   describe_collection: null,
