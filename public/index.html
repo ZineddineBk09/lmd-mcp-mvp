@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Yassir LMD Ops Copilot</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -177,6 +177,7 @@ select:focus{border-color:var(--primary)}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes bounce{to{transform:translateY(-6px)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -188,7 +189,7 @@ select:focus{border-color:var(--primary)}
   <aside class="sidebar" id="sidebar">
     <div class="brand-header">
       <div class="logo-row">
-        <img src="/yassir-logo.svg" alt="Yassir" class="logo-img">
+        <img src="yassir-logo.svg" alt="Yassir" class="logo-img">
       </div>
       <div class="console-badge">AI Ops Console</div>
     </div>
@@ -206,12 +207,22 @@ select:focus{border-color:var(--primary)}
     </div>
 
     <div class="sidebar-section">
-      <h3>Auth Token</h3>
-      <input type="password" id="authTokenInput" placeholder="Paste JWT token..." style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;font-family:monospace;outline:none">
-      <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-        <div id="authDot" style="width:8px;height:8px;border-radius:50%;background:var(--text-muted)"></div>
-        <span id="authStatus" style="font-size:11px;color:var(--text-muted)">No token set</span>
+      <h3>Authentication</h3>
+      <div id="authBanner" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)">
+        <div id="authDot" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--text-muted)"></div>
+        <div style="flex:1;min-width:0">
+          <div id="authStatus" style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Checking...</div>
+          <div id="authDetail" style="font-size:10px;color:var(--text-dim);margin-top:2px;display:none"></div>
+        </div>
       </div>
+      <div id="authErrorBox" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid var(--danger)">
+        <div id="authErrorMsg" style="font-size:12px;color:var(--danger);margin-bottom:6px"></div>
+        <button id="authRefreshBtn" onclick="window.location.reload()" style="font-size:11px;padding:4px 12px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer">Refresh Page</button>
+      </div>
+      <details style="margin-top:8px">
+        <summary style="font-size:11px;color:var(--text-dim);cursor:pointer;user-select:none">Manual token override</summary>
+        <input type="password" id="authTokenInput" placeholder="Paste JWT token..." style="width:100%;margin-top:6px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;font-family:monospace;outline:none">
+      </details>
     </div>
 
     <div class="sidebar-section">
@@ -448,24 +459,65 @@ function importConversations(e) {
 
 function $(id) { return document.getElementById(id); }
 
-function updateAuthStatus(token) {
+function getGlobalsCookie() {
+  try {
+    const match = document.cookie.split(";").map(c => c.trim()).find(c => c.startsWith("globals="));
+    if (!match) return null;
+    return JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
+  } catch { return null; }
+}
+
+function setAuthUI(state, opts = {}) {
   const dot = $("authDot");
   const label = $("authStatus");
+  const detail = $("authDetail");
+  const errorBox = $("authErrorBox");
+
+  errorBox.style.display = "none";
+
+  const states = {
+    checking:  { color: "var(--text-muted)", text: "Checking...", detail: "" },
+    connected: { color: "var(--success)", text: opts.username || "Authenticated", detail: opts.detail || "" },
+    globals:   { color: "var(--success)", text: opts.username || "Authenticated via dashboard", detail: opts.detail || "" },
+    cookie:    { color: "var(--success)", text: opts.username || "Authenticated via dashboard", detail: opts.detail || "" },
+    env:       { color: "var(--primary-light)", text: "Using server token", detail: "" },
+    manual:    { color: "var(--success)", text: opts.username || "Manual token set", detail: "" },
+    none:      { color: "var(--text-muted)", text: "Not authenticated", detail: "Login to the dashboard first" },
+    error:     { color: "var(--danger)", text: "Auth failed", detail: "" },
+    invalid:   { color: "var(--warn)", text: "Invalid token format", detail: "" },
+  };
+
+  const s = states[state] || states.none;
+  dot.style.background = s.color;
+  label.textContent = s.text;
+  label.style.color = s.color;
+
+  if (s.detail) {
+    detail.textContent = s.detail;
+    detail.style.display = "block";
+  } else {
+    detail.style.display = "none";
+  }
+}
+
+function showAuthError(message) {
+  const errorBox = $("authErrorBox");
+  const errorMsg = $("authErrorMsg");
+  errorMsg.textContent = message;
+  errorBox.style.display = "block";
+  setAuthUI("error");
+}
+
+function updateAuthStatus(token) {
   if (!token) {
-    dot.style.background = "var(--text-muted)";
-    label.textContent = "No token set (using server default)";
-    label.style.color = "var(--text-muted)";
+    setAuthUI("none");
     return;
   }
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
-    dot.style.background = "var(--success)";
-    label.textContent = payload.username || "Authenticated";
-    label.style.color = "var(--success)";
+    setAuthUI("manual", { username: payload.username || "Authenticated" });
   } catch {
-    dot.style.background = "var(--warn)";
-    label.textContent = "Invalid token format";
-    label.style.color = "var(--warn)";
+    setAuthUI("invalid");
   }
 }
 
@@ -505,10 +557,48 @@ function init() {
     localStorage.setItem("devMode", $("devMode").checked);
   });
 
+  // Read globals cookie from dashboard session
+  const globals = getGlobalsCookie();
+  const currentUser = globals?.currentUser;
+
+  // Populate country selector from user's countryAssignments
+  if (currentUser?.countryAssignments?.length) {
+    const select = $("countrySelect");
+    select.innerHTML = "";
+    const COUNTRY_NAMES = { DZ: "Algeria", MA: "Morocco", TN: "Tunisia", FR: "France", ZA: "South Africa", SN: "Senegal" };
+    currentUser.countryAssignments.forEach(a => {
+      const code = a.country?.code;
+      if (!code) return;
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = (COUNTRY_NAMES[code] || a.country.name || code) + " (" + code + ")";
+      select.appendChild(opt);
+    });
+    // Default to the user's current country from globals, or saved, or first assignment
+    const savedCountry = localStorage.getItem("countryFocus");
+    const defaultCountry = savedCountry || currentUser.country_code || currentUser.countryAssignments[0]?.country?.code || "DZ";
+    select.value = defaultCountry;
+    if (!select.value) select.selectedIndex = 0;
+  } else {
+    const savedCountry = localStorage.getItem("countryFocus");
+    $("countrySelect").value = savedCountry && savedCountry !== "ALL" ? savedCountry : "DZ";
+  }
+  $("countrySelect").addEventListener("change", () => {
+    localStorage.setItem("countryFocus", $("countrySelect").value);
+  });
+
+  // Auth: globals cookie > manual token > check health
   const savedToken = localStorage.getItem("authToken");
   if (savedToken) {
     $("authTokenInput").value = savedToken;
     updateAuthStatus(savedToken);
+  } else if (currentUser?.authdata) {
+    setAuthUI("globals", {
+      username: currentUser.username,
+      detail: [currentUser.role, currentUser.country_name || currentUser.country_code].filter(Boolean).join(" \u00b7 ")
+    });
+  } else {
+    setAuthUI("checking");
   }
   $("authTokenInput").addEventListener("change", function() {
     const token = this.value.trim();
@@ -520,12 +610,6 @@ function init() {
     updateAuthStatus(token);
   });
 
-  const savedCountry = localStorage.getItem("countryFocus");
-  $("countrySelect").value = savedCountry && savedCountry !== "ALL" ? savedCountry : "DZ";
-  $("countrySelect").addEventListener("change", () => {
-    localStorage.setItem("countryFocus", $("countrySelect").value);
-  });
-
   conversationId = generateId();
   loadConversationList();
   checkHealth();
@@ -533,21 +617,73 @@ function init() {
 
 async function checkHealth() {
   try {
-    const res = await fetch("/api/health");
+    const res = await fetch("api/health", { credentials: "include" });
     const data = await res.json();
     $("providerName").textContent = data.provider;
     $("providerModel").textContent = data.model;
     $("providerDot").className = "provider-dot";
-    if (data.auth === "configured" && !localStorage.getItem("authToken")) {
-      updateAuthStatus(null);
-      $("authStatus").textContent = "Using server token";
-      $("authDot").style.background = "var(--primary-light)";
+    if (!localStorage.getItem("authToken")) {
+      if (data.auth === "globals") {
+        const g = getGlobalsCookie();
+        setAuthUI("globals", {
+          username: g?.currentUser?.username,
+          detail: [g?.currentUser?.role, "via dashboard session"].filter(Boolean).join(" \u00b7 ")
+        });
+      } else if (data.auth === "cookie" || data.auth === "header") {
+        setAuthUI("connected");
+      } else if (data.auth === "env") {
+        setAuthUI("env");
+      } else {
+        setAuthUI("none");
+      }
     }
   } catch {
     $("providerName").textContent = "Offline";
     $("providerModel").textContent = "Server not reachable";
     $("providerDot").className = "provider-dot offline";
+    if (!localStorage.getItem("authToken")) {
+      setAuthUI("none");
+    }
   }
+}
+
+function showToast(message, type = "info") {
+  let container = document.getElementById("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.style.cssText = "position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none";
+    document.body.appendChild(container);
+  }
+  const colors = { warn: "var(--warn)", error: "var(--danger)", info: "var(--primary-light)", success: "var(--success)" };
+  const toast = document.createElement("div");
+  toast.style.cssText = `pointer-events:auto;padding:12px 18px;border-radius:10px;background:var(--surface2);border:1px solid ${colors[type] || colors.info};color:var(--text);font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;animation:slideIn .3s ease;max-width:400px`;
+  const dot = document.createElement("div");
+  dot.style.cssText = `width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${colors[type] || colors.info}`;
+  toast.appendChild(dot);
+  const txt = document.createElement("span");
+  txt.textContent = message;
+  toast.appendChild(txt);
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = "0"; toast.style.transition = "opacity .3s"; setTimeout(() => toast.remove(), 300); }, 5000);
+}
+
+function showRetryButton(originalMessage) {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "display:flex;justify-content:center;margin:8px 0";
+  const btn = document.createElement("button");
+  btn.style.cssText = "padding:8px 20px;background:var(--surface2);color:var(--primary-light);border:1px solid var(--primary-dim);border-radius:8px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s";
+  btn.innerHTML = "&#x21bb; Retry";
+  btn.addEventListener("mouseenter", () => { btn.style.background = "var(--primary-dim)"; btn.style.color = "#fff"; });
+  btn.addEventListener("mouseleave", () => { btn.style.background = "var(--surface2)"; btn.style.color = "var(--primary-light)"; });
+  btn.addEventListener("click", () => {
+    wrap.remove();
+    $("chatInput").value = originalMessage;
+    sendMessage();
+  });
+  wrap.appendChild(btn);
+  $("chatMessages").appendChild(wrap);
+  scrollDown();
 }
 
 function toggleSidebar() {
@@ -878,20 +1014,26 @@ async function sendMessage() {
   if (authToken) {
     reqHeaders["authorization"] = authToken;
   }
+  const fetchOpts = { credentials: "include" };
 
   // Build request body BEFORE pushing to chatHistory to avoid sending the message twice
   const requestBody = JSON.stringify({ message: text, history: chatHistory.slice(-20), settings });
   chatHistory.push({ role: "user", content: text });
 
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch("api/chat", {
       method: "POST",
       headers: reqHeaders,
       body: requestBody,
       signal: controller.signal,
+      credentials: "include",
     });
 
     if (!response.ok) {
+      if (response.status === 401) throw new Error("AUTH:Your session has expired. Please refresh the dashboard page.");
+      if (response.status === 403) throw new Error("AUTH:Access denied. Your account may not have permission to use this tool.");
+      if (response.status === 429) throw new Error("RATE:Too many requests. Please wait a moment and try again.");
+      if (response.status >= 500) throw new Error("SERVER:The server encountered an error. Please try again.");
       throw new Error(`Server returned ${response.status}`);
     }
 
@@ -917,7 +1059,18 @@ async function sendMessage() {
         } else if (line.startsWith("data: ") && eventType) {
           try {
             const data = JSON.parse(line.slice(6));
-            if (eventType === "tool_call") {
+            if (eventType === "auth") {
+              const src = data.source === "globals" ? "via dashboard" : data.source === "env" ? "via server" : "";
+              setAuthUI(data.source || "connected", {
+                username: data.username,
+                detail: [data.role, src, data.tools_available + "/" + data.tools_total + " tools"].filter(Boolean).join(" \u00b7 ")
+              });
+            } else if (eventType === "auth_error") {
+              hideTyping();
+              showAuthError(data.message);
+              assistantText = "";
+              break;
+            } else if (eventType === "tool_call") {
               hideTyping();
               const ind = addToolIndicator(data.name, false);
               toolIndicators.set(data.name, ind);
@@ -934,7 +1087,15 @@ async function sendMessage() {
               queries = data.queries || [];
             } else if (eventType === "error") {
               hideTyping();
-              assistantText = "Error: " + data.message;
+              const errType = data.type || "unknown";
+              if (errType === "auth") {
+                showAuthError(data.message);
+              } else if (errType === "rate_limit") {
+                assistantText = "";
+                showToast(data.message, "warn");
+              } else {
+                assistantText = data.message;
+              }
             }
           } catch {}
           eventType = null;
@@ -959,7 +1120,18 @@ async function sendMessage() {
     if (err.name === "AbortError") {
       addMessage("assistant", "Request stopped.");
     } else {
-      addMessage("assistant", "Connection error: " + err.message);
+      const msg = err.message || String(err);
+      if (msg.startsWith("AUTH:")) {
+        showAuthError(msg.slice(5));
+      } else if (msg.startsWith("RATE:")) {
+        showToast(msg.slice(5), "warn");
+      } else if (msg.startsWith("SERVER:")) {
+        addMessage("assistant", msg.slice(7));
+        showRetryButton(text);
+      } else {
+        addMessage("assistant", msg);
+        showRetryButton(text);
+      }
     }
   } finally {
     clearTimeout(timeout);

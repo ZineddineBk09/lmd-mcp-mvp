@@ -9,38 +9,47 @@ const MAX_TIME_MS = 30_000;
 
 // ── Security: blocked stages, operators, collections ────────────────
 
-const BLOCKED_STAGES = new Set([
-  '$out',
-  '$merge',
-  '$currentOp',
-  '$listSessions',
-  '$listLocalSessions',
-  '$collStats',
-  '$indexStats',
-  '$planCacheStats',
-]);
+const BLOCKED_STAGES = new Set(['$out', '$merge', '$currentOp', '$listSessions', '$listLocalSessions', '$collStats', '$indexStats', '$planCacheStats']);
 
-const BLOCKED_OPERATORS = new Set([
-  '$function',
-  '$accumulator',
-  '$where',
-]);
+const BLOCKED_OPERATORS = new Set(['$function', '$accumulator', '$where']);
 
 const BLOCKED_COLLECTIONS = new Set(['system.views', 'system.profile', 'system.js']);
 
 const DEPRECATED_COLLECTIONS = new Set([
-  'cart', 'restaurants', 'blogpostxes', 'blogpostxxes', 'blogs',
-  'categoriesX', 'model1', 'delete_me', 'billing_comparison',
-  'billing_cycle_copy', 'billing_cycle_duplicates',
-  'billing_cycle_duplicates_by_city', 'billing_cycle_duplicates_by_city_dangling',
-  'billing_cycle_fallback', 'billing_cycle_fallback2',
-  'driver_billings_fallback', 'driver_billings_fallback2',
-  'restaurant_billings_cleanup_v2', 'restaurant_billing_cycle_cleanup_v2',
-  'cartv2_archived', 'deleted_restaurant_orders_backup',
-  'tmp_deleted_restaurants', 'rejectedOrdersTemp',
-  'temp_cart', 'temp_payment', 'temp_popular_items_1755449372867',
-  'cartlog', 'count_yamaps_google', 'cobrand', 'cobrandproduct',
-  'postfooter', 'postheader', 'newsletter_subscriber', 'contact',
+  'cart',
+  'restaurants',
+  'blogpostxes',
+  'blogpostxxes',
+  'blogs',
+  'categoriesX',
+  'model1',
+  'delete_me',
+  'billing_comparison',
+  'billing_cycle_copy',
+  'billing_cycle_duplicates',
+  'billing_cycle_duplicates_by_city',
+  'billing_cycle_duplicates_by_city_dangling',
+  'billing_cycle_fallback',
+  'billing_cycle_fallback2',
+  'driver_billings_fallback',
+  'driver_billings_fallback2',
+  'restaurant_billings_cleanup_v2',
+  'restaurant_billing_cycle_cleanup_v2',
+  'cartv2_archived',
+  'deleted_restaurant_orders_backup',
+  'tmp_deleted_restaurants',
+  'rejectedOrdersTemp',
+  'temp_cart',
+  'temp_payment',
+  'temp_popular_items_1755449372867',
+  'cartlog',
+  'count_yamaps_google',
+  'cobrand',
+  'cobrandproduct',
+  'postfooter',
+  'postheader',
+  'newsletter_subscriber',
+  'contact',
 ]);
 
 const COLLECTION_REDIRECTS: Record<string, string> = {
@@ -52,17 +61,40 @@ const COLLECTION_REDIRECTS: Record<string, string> = {
 };
 
 const BLOCKED_FIELDS = [
-  'password', 'token', 'secret', 'credit_card', 'card_number', 'cvv',
-  'pin', 'otp', 'refresh_token', 'access_token', 'api_key', 'apikey',
-  'client_secret', 'auth_code', 'approval_code', 'transaction_id',
-  'payment_order_id', 'action_id', 'device_token',
+  'password',
+  'token',
+  'secret',
+  'credit_card',
+  'card_number',
+  'cvv',
+  'pin',
+  'otp',
+  'refresh_token',
+  'access_token',
+  'api_key',
+  'apikey',
+  'client_secret',
+  'auth_code',
+  'approval_code',
+  'transaction_id',
+  'payment_order_id',
+  'action_id',
+  'device_token',
 ];
 
 const COLLECTION_REDACTED_KEYS: Record<string, string[]> = {
   cart_payment_transactions: [
-    'MICRO_SERVICE_TRANSACTION_ID', 'YASSIR_ACTION_ID', 'PAYMENT_ORDER_ID',
-    'CLIENT_SECRET_KEY', 'AUTH_CODE', 'AUTH_CODE_DESC', 'APPROVAL_CODE',
-    'END_MESSAGES', 'TRACKER', 'INTERNAL_ERROR_MESSAGE', 'REMOTE_ERROR_MESSAGE',
+    'MICRO_SERVICE_TRANSACTION_ID',
+    'YASSIR_ACTION_ID',
+    'PAYMENT_ORDER_ID',
+    'CLIENT_SECRET_KEY',
+    'AUTH_CODE',
+    'AUTH_CODE_DESC',
+    'APPROVAL_CODE',
+    'END_MESSAGES',
+    'TRACKER',
+    'INTERNAL_ERROR_MESSAGE',
+    'REMOTE_ERROR_MESSAGE',
   ],
   courier_payments: ['MICRO_SERVICE_TRANSACTION_ID', 'YASSIR_ACTION_ID', 'PAYMENT_ORDER_ID', 'CLIENT_SECRET_KEY', 'AUTH_CODE', 'AUTH_CODE_DESC', 'APPROVAL_CODE'],
   payment_gateway: ['MICRO_SERVICE_TRANSACTION_ID', 'CLIENT_SECRET_KEY', 'AUTH_CODE', 'APPROVAL_CODE'],
@@ -72,21 +104,20 @@ const COLLECTION_REDACTED_KEYS: Record<string, string[]> = {
 // ── Schema ──────────────────────────────────────────────────────────
 
 export const runAggregationSchema = z.object({
-  collection: z.string().describe(
-    'MongoDB collection to aggregate. Examples: orders, restaurant, drivers, city, users, food, dispatches, ratings, coupon, offer, billing_cycle, driver_billings, countrycurrency.',
-  ),
-  pipeline: z.array(z.record(z.unknown())).min(1).describe(
-    'MongoDB aggregation pipeline — array of stage objects. ' +
-    'Allowed stages: $match, $group, $sort, $limit, $skip, $project, $unwind, $lookup, $addFields, $set, $unset, $count, $facet, $bucket, $bucketAuto, $replaceRoot, $replaceWith, $sortByCount, $sample, $redact, $graphLookup. ' +
-    'BLOCKED stages (will be rejected): $out, $merge, $currentOp. ' +
-    'Always start with a $match to narrow the dataset. Include $limit to cap results.',
-  ),
-  explain: z.boolean().optional().describe(
-    'If true, returns the query execution plan instead of results. Useful for checking if indexes are used.',
-  ),
-  comment: z.string().optional().describe(
-    'Human-readable description of what this pipeline computes (for logging).',
-  ),
+  collection: z
+    .string()
+    .describe('MongoDB collection to aggregate. Examples: orders, restaurant, drivers, city, users, food, dispatches, ratings, coupon, offer, billing_cycle, driver_billings, countrycurrency.'),
+  pipeline: z
+    .array(z.record(z.unknown()))
+    .min(1)
+    .describe(
+      'MongoDB aggregation pipeline — array of stage objects. ' +
+        'Allowed stages: $match, $group, $sort, $limit, $skip, $project, $unwind, $lookup, $addFields, $set, $unset, $count, $facet, $bucket, $bucketAuto, $replaceRoot, $replaceWith, $sortByCount, $sample, $redact, $graphLookup. ' +
+        'BLOCKED stages (will be rejected): $out, $merge, $currentOp. ' +
+        'Always start with a $match to narrow the dataset. Include $limit to cap results.',
+    ),
+  explain: z.boolean().optional().describe('If true, returns the query execution plan instead of results. Useful for checking if indexes are used.'),
+  comment: z.string().optional().describe('Human-readable description of what this pipeline computes (for logging).'),
 });
 
 export type RunAggregationInput = z.infer<typeof runAggregationSchema>;
@@ -278,9 +309,7 @@ function inferDisplayHint(results: Record<string, unknown>[]): string {
   const sample = results[0];
   const keys = Object.keys(sample);
 
-  const hasTimeKey = keys.some((k) =>
-    /date|day|hour|week|month|period|time|bucket/i.test(k) || k === '_id' && typeof sample._id === 'string' && /^\d{4}/.test(sample._id as string),
-  );
+  const hasTimeKey = keys.some((k) => /date|day|hour|week|month|period|time|bucket/i.test(k) || (k === '_id' && typeof sample._id === 'string' && /^\d{4}/.test(sample._id as string)));
   const hasCount = keys.some((k) => /count|total|sum|orders/i.test(k));
   const hasAvg = keys.some((k) => /avg|average|mean/i.test(k));
 
@@ -314,25 +343,16 @@ export async function runAggregation(params: RunAggregationInput) {
   }
 
   if (BLOCKED_COLLECTIONS.has(collectionName)) {
-    return wrapToolResponse(
-      { error: `Collection '${collectionName}' is not accessible.` },
-      { query: 'BLOCKED', execution_time_ms: 0, result_count: 0 },
-    );
+    return wrapToolResponse({ error: `Collection '${collectionName}' is not accessible.` }, { query: 'BLOCKED', execution_time_ms: 0, result_count: 0 });
   }
 
   if (DEPRECATED_COLLECTIONS.has(collectionName)) {
-    return wrapToolResponse(
-      { error: `Collection '${collectionName}' is deprecated or empty.` },
-      { query: 'BLOCKED', execution_time_ms: 0, result_count: 0 },
-    );
+    return wrapToolResponse({ error: `Collection '${collectionName}' is deprecated or empty.` }, { query: 'BLOCKED', execution_time_ms: 0, result_count: 0 });
   }
 
   const validationError = validatePipeline(params.pipeline);
   if (validationError) {
-    return wrapToolResponse(
-      { error: validationError },
-      { query: 'BLOCKED', execution_time_ms: 0, result_count: 0 },
-    );
+    return wrapToolResponse({ error: validationError }, { query: 'BLOCKED', execution_time_ms: 0, result_count: 0 });
   }
 
   let pipeline = [...params.pipeline];
@@ -340,16 +360,18 @@ export async function runAggregation(params: RunAggregationInput) {
   // Pre-process $match stages: resolve $dateSubtract, $dateAdd, $$NOW, and ISO strings to real Date objects
   pipeline = preprocessPipeline(pipeline);
 
+  console.log(
+    `[agg-debug] Preprocessed pipeline for "${collectionName}":`,
+    JSON.stringify(pipeline, (_k, v) => (v instanceof Date ? `ISODate("${v.toISOString()}")` : v)),
+  );
+
   if (!pipelineHasLimit(pipeline) && !pipelineHasFacet(pipeline)) {
     pipeline.push({ $limit: MAX_RESULT_DOCS });
   }
 
   const db = mongoose.connection.db;
   if (!db) {
-    return wrapToolResponse(
-      { error: 'Database not connected.' },
-      { query: 'FAILED', execution_time_ms: 0, result_count: 0 },
-    );
+    return wrapToolResponse({ error: 'Database not connected.' }, { query: 'FAILED', execution_time_ms: 0, result_count: 0 });
   }
 
   const col = db.collection(collectionName);
@@ -357,9 +379,7 @@ export async function runAggregation(params: RunAggregationInput) {
 
   try {
     if (params.explain) {
-      const plan = await col
-        .aggregate(pipeline, { maxTimeMS: MAX_TIME_MS })
-        .explain('executionStats');
+      const plan = await col.aggregate(pipeline, { maxTimeMS: MAX_TIME_MS }).explain('executionStats');
 
       logQuery({
         tool: 'run_aggregation',
@@ -383,15 +403,19 @@ export async function runAggregation(params: RunAggregationInput) {
       );
     }
 
-    const rawResults = await col
-      .aggregate(pipeline, { maxTimeMS: MAX_TIME_MS })
-      .toArray();
+    const rawResults = await col.aggregate(pipeline, { maxTimeMS: MAX_TIME_MS }).toArray();
 
-    const results = rawResults.map((doc) =>
-      stripBlockedFields(doc as Record<string, unknown>, collectionName),
-    );
+    const results = rawResults.map((doc) => stripBlockedFields(doc as Record<string, unknown>, collectionName));
 
     const executionTime = Date.now() - start;
+
+    // Verbose logging for debugging: log each result row when set is small
+    if (results.length > 0 && results.length <= 50) {
+      console.log(`[agg-debug] ${collectionName} | ${params.comment ?? 'no comment'} | ${results.length} results:`);
+      results.forEach((r, i) => {
+        console.log(`[agg-debug]   [${i}] ${JSON.stringify(r)}`);
+      });
+    }
 
     logQuery({
       tool: 'run_aggregation',

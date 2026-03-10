@@ -12,11 +12,32 @@ import mongoose from 'mongoose';
 import { connectMongoDB } from '../connections/mongodb.js';
 import { getOpenAITools, executeTool, getToolCount, getFilteredToolCount } from './tool-registry.js';
 import type { AuthContext } from '../auth/types.js';
-import { HttpClient } from '../api/http-client.js';
+import { HttpClient, ApiAuthError } from '../api/http-client.js';
 import { fetchCurrentUser, clearAuthCache } from '../api/auth.api.js';
 import { initHttpClient } from '../api/http-client.js';
 import { isWriteTool } from '../auth/safety-tiers.js';
 import { logTool, getRecentToolLogs } from '../utils/tool-logger.js';
+
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  if (!cookieHeader) return {};
+  const cookies: Record<string, string> = {};
+  for (const pair of cookieHeader.split(';')) {
+    const idx = pair.indexOf('=');
+    if (idx < 1) continue;
+    const key = pair.slice(0, idx).trim();
+    cookies[key] = pair.slice(idx + 1).trim();
+  }
+  return cookies;
+}
+
+class AuthError extends Error {
+  code: 'token_expired' | 'token_invalid' | 'token_missing' | 'auth_failed';
+  constructor(code: AuthError['code'], message: string) {
+    super(message);
+    this.name = 'AuthError';
+    this.code = code;
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -110,27 +131,80 @@ const stats = {
   startedAt: new Date().toISOString(),
 };
 
-async function resolveAuthContext(req: express.Request): Promise<AuthContext | undefined> {
-  const authHeader = (req.headers.authorization as string | undefined) ?? (req.headers['x-auth-token'] as string | undefined) ?? process.env.YASSIR_AUTH_TOKEN;
+interface ResolvedAuth {
+  ctx: AuthContext;
+  source: 'globals' | 'header' | 'env';
+}
 
+interface GlobalsCookie {
+  currentUser?: {
+    username?: string;
+    role?: string;
+    id?: string;
+    authdata?: string;
+    country_code?: string;
+    country_name?: string;
+    countryAssignments?: Array<{ country: { code: string; name: string } }>;
+  };
+}
+
+function parseGlobalsCookie(cookies: Record<string, string>): GlobalsCookie | null {
+  const raw = cookies['globals'];
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(raw)) as GlobalsCookie;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveAuthContext(req: express.Request): Promise<ResolvedAuth> {
+  const cookies = parseCookies(req.headers.cookie);
+  const rawCookieHeader = req.headers.cookie;
   const baseURL = process.env.YASSIR_API_BASE_URL;
-  if (!authHeader || !baseURL) return undefined;
+  if (!baseURL) throw new AuthError('auth_failed', 'Server missing YASSIR_API_BASE_URL configuration');
 
+  const globals = parseGlobalsCookie(cookies);
+
+  // Token priority: authorization header > globals cookie authdata > env
+  const headerToken = (req.headers.authorization as string | undefined) ?? (req.headers['x-auth-token'] as string | undefined);
+  const globalsToken = globals?.currentUser?.authdata;
+  const envToken = process.env.YASSIR_AUTH_TOKEN;
+
+  const authToken = headerToken || globalsToken || envToken;
+  const tokenSource: ResolvedAuth['source'] = headerToken ? 'header' : globalsToken ? 'globals' : 'env';
+
+  if (!authToken) {
+    throw new AuthError('token_missing', 'No authentication token found. Please log in to the dashboard first.');
+  }
+
+  // Country: header > globals cookie > body > env
   const headerCountry = req.headers['country-code'] as string | undefined;
+  const globalsCountry = globals?.currentUser?.country_code;
   const bodySettings = (req.body as { settings?: { country_code?: string } })?.settings;
-  const countryCode: string = headerCountry ?? bodySettings?.country_code ?? process.env.YASSIR_COUNTRY_CODE ?? 'DZ';
+  const countryCode: string = headerCountry ?? globalsCountry ?? bodySettings?.country_code ?? process.env.YASSIR_COUNTRY_CODE ?? 'DZ';
 
   try {
     const client = new HttpClient({
       baseURL,
-      token: authHeader,
+      token: authToken,
       countryCode,
+      rawCookies: rawCookieHeader,
       iapCookie: process.env.YASSIR_IAP_COOKIE || undefined,
     });
-    return await fetchCurrentUser(client, authHeader, countryCode);
+    const ctx = await fetchCurrentUser(client, authToken, countryCode);
+    console.log(`[auth] Resolved user "${ctx.username}" via ${tokenSource} (role=${ctx.role}, country=${countryCode})`);
+    return { ctx, source: tokenSource };
   } catch (err) {
-    console.warn('[web] Auth resolution failed:', err instanceof Error ? err.message : err);
-    return undefined;
+    if (err instanceof ApiAuthError) {
+      if (err.status === 401) {
+        throw new AuthError('token_expired', 'Your session has expired. Please refresh the dashboard to get a new token.');
+      }
+      throw new AuthError('token_invalid', `Access denied (${err.status}). Your account may lack the required permissions.`);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[auth] Auth resolution failed (source=${tokenSource}):`, msg);
+    throw new AuthError('auth_failed', `Authentication failed: ${msg}`);
   }
 }
 
@@ -150,17 +224,15 @@ async function main() {
       iapCookie: process.env.YASSIR_IAP_COOKIE || undefined,
     });
     console.log(`[web] API client initialized: ${apiBaseURL}`);
-    if (process.env.YASSIR_IAP_COOKIE) {
-      console.log('[web] IAP cookie configured for preprod access');
-    } else {
-      console.warn('[web] No YASSIR_IAP_COOKIE set — API calls to IAP-protected environments will fail');
-    }
+    console.log('[web] Auth mode: globals cookie (same-domain) + header fallback + env fallback');
   }
 
   const openai = new OpenAI({
     apiKey: provider.apiKey,
     baseURL: provider.baseURL,
   });
+
+  const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, '');
 
   const app = express();
 
@@ -180,6 +252,9 @@ async function main() {
   app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
   app.use(express.json({ limit: '1mb' }));
 
+  // All routes live under BASE_PATH (e.g. /lmd-mcp)
+  const router = express.Router();
+
   const chatLimiter = rateLimit({
     windowMs: 60_000,
     max: parseInt(process.env.RATE_LIMIT_RPM || '60', 10),
@@ -187,7 +262,7 @@ async function main() {
     legacyHeaders: false,
     message: { error: 'Too many requests, please try again later.' },
   });
-  app.use('/api/chat', chatLimiter);
+  router.use('/api/chat', chatLimiter);
 
   const API_KEY = process.env.API_KEY;
   if (API_KEY) {
@@ -199,13 +274,13 @@ async function main() {
       }
       next();
     };
-    app.use('/api/chat', apiKeyGuard);
-    app.use('/api/export', apiKeyGuard);
+    router.use('/api/chat', apiKeyGuard);
+    router.use('/api/export', apiKeyGuard);
     console.log('[web] API key authentication enabled for /api/chat, /api/export');
   }
 
   const publicDir = resolve(__dirname, '..', '..', 'public');
-  app.use(
+  router.use(
     express.static(publicDir, {
       etag: false,
       setHeaders: (res, filePath) => {
@@ -216,9 +291,20 @@ async function main() {
     }),
   );
 
-  app.get('/api/health', (_req, res) => {
+  router.get('/api/health', (req, res) => {
     const dbReady = mongoose.connection.readyState === 1;
     const hasEnvToken = Boolean(process.env.YASSIR_AUTH_TOKEN);
+    const cookies = parseCookies(req.headers.cookie);
+    const globals = parseGlobalsCookie(cookies);
+    const hasGlobals = Boolean(globals?.currentUser?.authdata);
+    const hasHeaderToken = Boolean(req.headers.authorization || req.headers['x-auth-token']);
+
+    let authMode: string;
+    if (hasHeaderToken) authMode = 'header';
+    else if (hasGlobals) authMode = 'globals';
+    else if (hasEnvToken) authMode = 'env';
+    else authMode = 'none';
+
     res.status(dbReady ? 200 : 503).json({
       status: dbReady ? 'ok' : 'degraded',
       db: dbReady ? 'connected' : 'disconnected',
@@ -226,18 +312,24 @@ async function main() {
       model: provider.model,
       tools: getToolCount(),
       api_layer: apiBaseURL ? 'enabled' : 'disabled',
-      auth: hasEnvToken ? 'configured' : 'not_configured',
+      auth: authMode,
     });
   });
 
-  app.post('/api/export', async (req, res) => {
+  router.post('/api/export', async (req, res) => {
     const { tool, params } = req.body as { tool: string; params: unknown };
     if (!tool) {
       res.status(400).json({ error: 'tool is required' });
       return;
     }
     try {
-      const authCtx = await resolveAuthContext(req);
+      let authCtx: AuthContext | undefined;
+      try {
+        const resolved = await resolveAuthContext(req);
+        authCtx = resolved.ctx;
+      } catch {
+        // Non-critical for export, continue without auth
+      }
       const { text: resultText } = await executeTool(tool, params ?? {}, authCtx);
       const parsed = JSON.parse(resultText);
 
@@ -269,7 +361,7 @@ async function main() {
     }
   });
 
-  app.get('/api/stats', (_req, res) => {
+  router.get('/api/stats', (_req, res) => {
     res.json({
       unique_users: stats.visitors.size,
       total_chats: stats.chatRequests,
@@ -277,7 +369,7 @@ async function main() {
     });
   });
 
-  app.get('/api/logs', (req, res) => {
+  router.get('/api/logs', (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const phase = req.query.phase as string | undefined;
     let logs = getRecentToolLogs(limit);
@@ -287,7 +379,7 @@ async function main() {
     res.json({ count: logs.length, logs });
   });
 
-  app.post('/api/chat', async (req, res) => {
+  router.post('/api/chat', async (req, res) => {
     stats.visitors.add(req.ip || req.socket.remoteAddress || 'unknown');
     stats.chatRequests++;
 
@@ -326,7 +418,25 @@ async function main() {
     };
 
     try {
-      const authCtx = await resolveAuthContext(req);
+      let authCtx: AuthContext | undefined;
+      let authSource: ResolvedAuth['source'] | undefined;
+      try {
+        const resolved = await resolveAuthContext(req);
+        authCtx = resolved.ctx;
+        authSource = resolved.source;
+      } catch (authErr) {
+        if (authErr instanceof AuthError) {
+          send('auth_error', {
+            code: authErr.code,
+            message: authErr.message,
+          });
+          send('done', {});
+          clearTimeout(timeout);
+          res.end();
+          return;
+        }
+        throw authErr;
+      }
 
       const tools = getOpenAITools(authCtx?.privileges, authCtx?.role);
       const filteredCount = tools.length;
@@ -343,6 +453,7 @@ async function main() {
           country: authCtx.countryCode,
           tools_available: filteredCount,
           tools_total: getToolCount(),
+          source: authSource,
         });
       }
 
@@ -448,25 +559,57 @@ async function main() {
     } catch (err: unknown) {
       clearTimeout(timeout);
       if (!aborted) {
-        const msg = err instanceof Error ? err.message : String(err);
-        send('error', { message: msg });
+        let errorType = 'unknown';
+        let userMessage = 'An unexpected error occurred.';
+
+        if (err instanceof AuthError) {
+          errorType = 'auth';
+          userMessage = err.message;
+        } else if (err instanceof Error) {
+          const msg = err.message;
+          if (msg.includes('429') || msg.includes('rate limit') || msg.toLowerCase().includes('quota')) {
+            errorType = 'rate_limit';
+            userMessage = 'Rate limit reached. Please wait a moment and try again.';
+          } else if (msg.includes('timeout') || msg.includes('ETIMEDOUT') || msg.includes('ECONNABORTED')) {
+            errorType = 'timeout';
+            userMessage = 'The request timed out. Try a simpler question or try again.';
+          } else if (msg.includes('model') || msg.includes('API key') || msg.includes('401') || msg.includes('openai')) {
+            errorType = 'llm';
+            userMessage = `LLM provider error: ${msg}`;
+          } else {
+            errorType = 'server';
+            userMessage = msg;
+          }
+        }
+
+        send('error', { type: errorType, message: userMessage });
         res.end();
       }
     }
   });
 
+  // Mount router at BASE_PATH (or root if not set)
+  if (BASE_PATH) {
+    app.use(BASE_PATH, router);
+    // Redirect /lmd-mcp to /lmd-mcp/ so relative URLs work
+    app.get(BASE_PATH, (_req, res) => res.redirect(301, `${BASE_PATH}/`));
+  } else {
+    app.use('/', router);
+  }
+
   const PORT = parseInt(process.env.PORT || process.env.WEB_PORT || '3737', 10);
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[web] Yassir LMD Ops Copilot running at http://localhost:${PORT}`);
-    console.log(`[web] Share on local network: http://<your-ip>:${PORT}`);
+    const basePath = BASE_PATH || '';
+    console.log(`[web] Yassir LMD Ops Copilot running at http://localhost:${PORT}${basePath}/`);
+    if (BASE_PATH) console.log(`[web] Base path: ${BASE_PATH}`);
 
     const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
     if (RENDER_URL) {
       const PING_INTERVAL_MS = 10 * 60 * 1000;
       setInterval(async () => {
         try {
-          const r = await fetch(`${RENDER_URL}/api/health`);
-          console.log(`[keep-alive] pinged ${RENDER_URL}/api/health → ${r.status}`);
+          const r = await fetch(`${RENDER_URL}${basePath}/api/health`);
+          console.log(`[keep-alive] pinged ${RENDER_URL}${basePath}/api/health → ${r.status}`);
         } catch (e) {
           console.warn('[keep-alive] ping failed:', (e as Error).message);
         }
