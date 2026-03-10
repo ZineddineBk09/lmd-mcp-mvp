@@ -1,9 +1,21 @@
 import { logTool } from '../utils/tool-logger.js';
 
+export class ApiAuthError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiAuthError';
+    this.status = status;
+  }
+}
+
 export interface HttpClientOptions {
   baseURL: string;
   token: string;
   countryCode?: string;
+  /** Forward the entire raw Cookie header from the browser request to backend API calls (carries IAP tokens, session, etc.) */
+  rawCookies?: string;
+  /** @deprecated Use rawCookies instead. Kept for backward compat with env-only setups. */
   iapCookie?: string;
 }
 
@@ -19,13 +31,13 @@ export class HttpClient {
   private baseURL: string;
   private token: string;
   private defaultCountryCode: string;
-  private iapCookie: string | undefined;
+  private cookieHeader: string | undefined;
 
   constructor(options: HttpClientOptions) {
     this.baseURL = options.baseURL.replace(/\/$/, '');
     this.token = options.token;
     this.defaultCountryCode = options.countryCode ?? 'DZ';
-    this.iapCookie = options.iapCookie;
+    this.cookieHeader = options.rawCookies || options.iapCookie;
   }
 
   private buildHeaders(countryCode?: string): Record<string, string> {
@@ -35,8 +47,8 @@ export class HttpClient {
       accept: 'application/json',
       'country-code': countryCode ?? this.defaultCountryCode,
     };
-    if (this.iapCookie) {
-      headers['cookie'] = this.iapCookie;
+    if (this.cookieHeader) {
+      headers['cookie'] = this.cookieHeader;
     }
     return headers;
   }
@@ -88,6 +100,9 @@ export class HttpClient {
         result: text.slice(0, 500),
         meta: { method: options.method, path: options.path, status: response.status },
       });
+      if (response.status === 401 || response.status === 403) {
+        throw new ApiAuthError(response.status, `API ${options.method} ${options.path} failed (${response.status}): ${text}`);
+      }
       throw new Error(`API ${options.method} ${options.path} failed (${response.status}): ${text}`);
     }
 
