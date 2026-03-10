@@ -8,7 +8,7 @@ export const getAdminEarningsSchema = z.object({
   city: z
     .string()
     .optional()
-    .describe('City name to filter by, using backend city names (e.g. DZ → "Alger", "Oran"; MA → "Casablanca"). ' + 'Omit to get all cities.'),
+    .describe('City name to filter by, using backend city names (e.g. DZ → "Alger Center", "Oran"; MA → "Casablanca"). ' + 'Omit to get all cities.'),
   area: z.string().optional().describe('Sub-city / area filter'),
   service: z.string().optional().describe('Service type filter'),
   start_date: z.string().optional().describe('Start date as ISO string or Unix timestamp in ms. Defaults to 30 days ago if omitted.'),

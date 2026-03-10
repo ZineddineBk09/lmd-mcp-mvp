@@ -41,6 +41,7 @@ import { getDriverPayoutsSchema, getDriverPayoutsHandler } from './finance/get-d
 import { getDriverPayoutDetailsSchema, getDriverPayoutDetailsHandler } from './finance/get-driver-payout-details.tool.js';
 import { listRestaurantCyclesSchema, listRestaurantCyclesHandler } from './finance/list-restaurant-cycles.tool.js';
 import { getRestaurantCycleOrdersSchema, getRestaurantCycleOrdersHandler } from './finance/get-restaurant-cycle-orders.tool.js';
+import { runAggregationSchema, runAggregation } from './analytics/run-aggregation.tool.js';
 
 export interface ToolAnnotations {
   readOnlyHint?: boolean;
@@ -332,6 +333,18 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     description: 'Analyze promo/coupon performance: redemption rates, top coupons by usage, generated vs used.',
     schema: promoPerformanceSchema,
     handler: (p) => getPromoPerformance(promoPerformanceSchema.parse(p)),
+    annotations: READ_ONLY,
+    source: 'db',
+  },
+  {
+    name: 'run_aggregation',
+    namespace: 'analytics',
+    description:
+      'Run a custom MongoDB aggregation pipeline on any collection. Supports $match, $group, $sort, $limit, $project, $unwind, $lookup, $facet, $bucket, $addFields, $count, and more. ' +
+      'Use for time-series analysis, distributions, correlations, cross-collection joins, and any analytics not covered by predefined tools. ' +
+      'Always start with a $match stage. Max 12 stages, 30s timeout, 1000 result cap. Set explain=true to check index usage.',
+    schema: runAggregationSchema,
+    handler: (p) => runAggregation(runAggregationSchema.parse(p)),
     annotations: READ_ONLY,
     source: 'db',
   },

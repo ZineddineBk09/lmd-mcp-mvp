@@ -180,6 +180,7 @@ select:focus{border-color:var(--primary)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 <body>
 <div class="app">
@@ -1002,6 +1003,18 @@ function renderMarkdown(text) {
   }
 }
 
+function deepMerge(target, source) {
+  for (const key of Object.keys(source)) {
+    if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])
+        && target[key] && typeof target[key] === "object" && !Array.isArray(target[key])) {
+      deepMerge(target[key], source[key]);
+    } else if (!(key in target)) {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}
+
 function renderCharts(container) {
   container.querySelectorAll("canvas[data-chart]").forEach(canvas => {
     try {
@@ -1012,21 +1025,38 @@ function renderCharts(container) {
             ds.backgroundColor = cfg.data.labels.map((_,j) => CHART_COLORS[j % CHART_COLORS.length]);
           } else {
             ds.backgroundColor = CHART_COLORS[i % CHART_COLORS.length] + "cc";
-            ds.borderColor = CHART_COLORS[i % CHART_COLORS.length];
-            ds.borderWidth = 2;
+            ds.borderColor = ds.borderColor || CHART_COLORS[i % CHART_COLORS.length];
+            ds.borderWidth = ds.borderWidth || 2;
           }
         }
+        if (cfg.type === "line" && ds.fill === undefined) ds.fill = false;
+        if (cfg.type === "line" && !ds.tension) ds.tension = 0.3;
       });
+
+      const darkThemeDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: "#e8e8f0" } },
+          title: { color: "#e8e8f0" },
+        },
+      };
+
       cfg.options = cfg.options || {};
-      cfg.options.responsive = true;
-      cfg.options.maintainAspectRatio = false;
-      cfg.options.plugins = cfg.options.plugins || {};
-      cfg.options.plugins.legend = { labels: { color: "#e8e8f0" } };
-      cfg.options.scales = cfg.options.scales || {};
+      deepMerge(cfg.options, darkThemeDefaults);
+
       if (cfg.type !== "pie" && cfg.type !== "doughnut") {
-        cfg.options.scales.x = { ticks: { color: "#8888a8" }, grid: { color: "#2d2d55" } };
-        cfg.options.scales.y = { ticks: { color: "#8888a8" }, grid: { color: "#2d2d55" } };
+        cfg.options.scales = cfg.options.scales || {};
+        const xDefaults = { ticks: { color: "#8888a8" }, grid: { color: "#2d2d55" } };
+        const yDefaults = { ticks: { color: "#8888a8" }, grid: { color: "#2d2d55" } };
+        cfg.options.scales.x = cfg.options.scales.x || {};
+        cfg.options.scales.y = cfg.options.scales.y || {};
+        deepMerge(cfg.options.scales.x, xDefaults);
+        deepMerge(cfg.options.scales.y, yDefaults);
+        if (cfg.options.scales.x.title) cfg.options.scales.x.title.color = cfg.options.scales.x.title.color || "#8888a8";
+        if (cfg.options.scales.y.title) cfg.options.scales.y.title.color = cfg.options.scales.y.title.color || "#8888a8";
       }
+
       new Chart(canvas, cfg);
     } catch (e) { console.warn("Chart render failed:", e); }
   });

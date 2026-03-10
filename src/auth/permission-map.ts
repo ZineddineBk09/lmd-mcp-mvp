@@ -49,6 +49,7 @@ export const TOOL_PERMISSION_MAP: Record<string, PermissionRequirement | null> =
   geo_analysis: { alias: 'dashboard', action: 'view' },
   ratings_analysis: { alias: 'dashboard', action: 'view' },
   promo_performance: { alias: 'dashboard', action: 'view' },
+  run_aggregation: { alias: 'dashboard', action: 'view' },
 
   // ── Config / Infra / Alerts ──────────────────────────────────────
   city_config_lookup: { alias: 'dashboard', action: 'view' },
