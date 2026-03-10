@@ -105,5 +105,20 @@ READ — Other:
 - scheduled reports → scheduled_reports
 - city settings / dispatch config → city_config_lookup
 - currency for a country → flexible_query on "countrycurrency" with filter {"country.code":"XX"}
+READ — Finance / Earnings:
+IMPORTANT — City names: Backend cities often use LOCAL names, not English. DZ → "Alger" (NOT "Algiers"), "Oran", "Constantine", "Annaba"; MA → "Casablanca", "Rabat"; TN → "Tunis". If a finance tool returns 0 results and the suggestion says city name mismatch, call flexible_query on the "city" collection with filter {"country_code":"XX"} and project {"state":1} to get valid city names.
+- platform earnings / admin earnings / "how much did we earn" → get_admin_earnings (filters: city, area, service, date range). Works without city — defaults to last 30 days of all cities.
+- OFSE earnings / "orders for someone else" → get_admin_earnings with ofse=true
+- driver payouts / driver earnings → CASCADING FLOW (2 steps, BOTH required):
+  Step 1: list_billing_cycles(city) → returns numbered cycles with IDs
+  Step 2: get_driver_payouts(billing_cycle=<selected_cycle_id>) → returns driver payouts
+  You MUST call list_billing_cycles first and let the user pick a cycle. NEVER call get_driver_payouts without a valid cycle ID from step 1.
+- specific driver earnings breakdown → get_driver_payout_details(driver_id, billing_id)
+- restaurant payouts / restaurant cycles → CASCADING FLOW (2 steps):
+  Step 1: list_restaurant_cycles(city) → returns restaurant cycles with IDs
+  Step 2: get_restaurant_cycle_orders(cycle_id) → returns orders in that cycle
+  City is REQUIRED for step 1. If 0 results, check city name spelling (see above).
+- Cycle statuses: 0=Invalid, 1=Active, 2=In Review, 3=Settled, 4=Paid, 5=Interrupted, 6=Cancelled, 7=Settling, 8=Manually Settled
+
 - anything else → flexible_query (can query ANY collection, direct DB fallback)
 - don't know which collection → list_collections → describe_collection → flexible_query

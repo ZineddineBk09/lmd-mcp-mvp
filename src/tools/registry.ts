@@ -35,6 +35,12 @@ import { getOrderDetailsSchema, getOrderDetailsHandler } from './orders/get-orde
 import { acceptOrderSchema, acceptOrderHandler } from './orders/accept-order.tool.js';
 import { rejectOrderSchema, rejectOrderHandler } from './orders/reject-order.tool.js';
 import { cancelOrderSchema, cancelOrderHandler } from './orders/cancel-order.tool.js';
+import { getAdminEarningsSchema, getAdminEarningsHandler } from './finance/get-admin-earnings.tool.js';
+import { listBillingCyclesSchema, listBillingCyclesHandler } from './finance/list-billing-cycles.tool.js';
+import { getDriverPayoutsSchema, getDriverPayoutsHandler } from './finance/get-driver-payouts.tool.js';
+import { getDriverPayoutDetailsSchema, getDriverPayoutDetailsHandler } from './finance/get-driver-payout-details.tool.js';
+import { listRestaurantCyclesSchema, listRestaurantCyclesHandler } from './finance/list-restaurant-cycles.tool.js';
+import { getRestaurantCycleOrdersSchema, getRestaurantCycleOrdersHandler } from './finance/get-restaurant-cycle-orders.tool.js';
 
 export interface ToolAnnotations {
   readOnlyHint?: boolean;
@@ -42,7 +48,7 @@ export interface ToolAnnotations {
   openWorldHint?: boolean;
 }
 
-export type ToolNamespace = 'orders' | 'fleet' | 'restaurant' | 'analytics' | 'dispatch' | 'config' | 'general' | 'infra' | 'alerts';
+export type ToolNamespace = 'orders' | 'fleet' | 'restaurant' | 'analytics' | 'dispatch' | 'config' | 'general' | 'infra' | 'alerts' | 'finance';
 
 export interface ToolDefinition {
   name: string;
@@ -393,5 +399,65 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     handler: (p) => listCollections(listCollectionsSchema.parse(p)),
     annotations: READ_ONLY,
     source: 'db',
+  },
+  // ── Finance / Earnings (API-backed) ───────────────────────────────
+  {
+    name: 'get_admin_earnings',
+    namespace: 'finance',
+    description:
+      'Get platform (Yassir) earnings with filters: city, area, date range, service. Shows order-level breakdown with restaurant/driver/admin totals. Set ofse=true for OFSE (Order For Someone Else) earnings. Defaults to last 30 days if no date range.',
+    schema: getAdminEarningsSchema,
+    handler: (p, ctx) => getAdminEarningsHandler(getAdminEarningsSchema.parse(p), ctx),
+    annotations: READ_ONLY,
+    source: 'api',
+  },
+  {
+    name: 'list_billing_cycles',
+    namespace: 'finance',
+    description: 'List driver billing cycles for a city. Returns recent cycles with date ranges. Use this first to get a cycle_id, then call get_driver_payouts to see driver earnings for that cycle.',
+    schema: listBillingCyclesSchema,
+    handler: (p, ctx) => listBillingCyclesHandler(listBillingCyclesSchema.parse(p), ctx),
+    annotations: READ_ONLY,
+    source: 'api',
+  },
+  {
+    name: 'get_driver_payouts',
+    namespace: 'finance',
+    description:
+      'Get driver payouts for a billing cycle. Shows all drivers with earnings breakdown: deliveries, charges, tax, tip, bonus, net, platform earnings, adjustments, cash-co, payout status. Requires a billing_cycle ID from list_billing_cycles.',
+    schema: getDriverPayoutsSchema,
+    handler: (p, ctx) => getDriverPayoutsHandler(getDriverPayoutsSchema.parse(p), ctx),
+    annotations: READ_ONLY,
+    source: 'api',
+  },
+  {
+    name: 'get_driver_payout_details',
+    namespace: 'finance',
+    description:
+      'Get detailed earnings for a single driver: per-order breakdown (customer paid, delivery charge, driver earnings, tax, tip, commission) and payout summary. If billing_id is omitted, shows unbilled earnings since last cycle.',
+    schema: getDriverPayoutDetailsSchema,
+    handler: (p, ctx) => getDriverPayoutDetailsHandler(getDriverPayoutDetailsSchema.parse(p), ctx),
+    annotations: READ_ONLY,
+    source: 'api',
+  },
+  {
+    name: 'list_restaurant_cycles',
+    namespace: 'finance',
+    description:
+      'List restaurant payout cycles for a city. Shows restaurant name, date range, cycle status (Active/Settled/Paid/Interrupted), and Yassir Pay flag. Use cycle_id with get_restaurant_cycle_orders to see orders.',
+    schema: listRestaurantCyclesSchema,
+    handler: (p, ctx) => listRestaurantCyclesHandler(listRestaurantCyclesSchema.parse(p), ctx),
+    annotations: READ_ONLY,
+    source: 'api',
+  },
+  {
+    name: 'get_restaurant_cycle_orders',
+    namespace: 'finance',
+    description:
+      'Get orders in a restaurant payout cycle. Shows order-level billing: item amount, customer paid, Yassir commission, restaurant earnings, tax, service charge. Requires cycle_id from list_restaurant_cycles.',
+    schema: getRestaurantCycleOrdersSchema,
+    handler: (p, ctx) => getRestaurantCycleOrdersHandler(getRestaurantCycleOrdersSchema.parse(p), ctx),
+    annotations: READ_ONLY,
+    source: 'api',
   },
 ];
