@@ -8,7 +8,7 @@ export const listBillingCyclesSchema = z.object({
     .string()
     .describe(
       'City name exactly as known by the backend (required). ' +
-        'Examples by country: DZ → "Alger", "Oran", "Constantine"; MA → "Casablanca", "Rabat"; TN → "Tunis". ' +
+        'Examples by country: DZ → "Alger Center", "Oran", "Constantine"; MA → "Casablanca", "Rabat"; TN → "Tunis". ' +
         'If unsure, use flexible_query on the "city" collection filtered by country_code to discover valid city names.',
     ),
   limit: z.number().min(1).max(100).optional().describe('Max cycles to return (default 20)'),
@@ -60,7 +60,7 @@ export async function listBillingCyclesHandler(params: Params, ctx?: AuthContext
           'Try using flexible_query on the "city" collection with filter {"country_code":"' +
           (params.country_code ?? ctx?.countryCode ?? 'DZ') +
           '"} to discover the exact city names available. ' +
-          'Common names: DZ uses "Alger" (not "Algiers"), MA uses "Casablanca", TN uses "Tunis".',
+          'Common names: DZ uses "Alger Center" (not "Algiers"), MA uses "Casablanca", TN uses "Tunis".',
       },
       _debug: {
         query: `API POST /billing/fetchCyclesByCity { cityname: "${params.city}" }`,

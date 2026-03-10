@@ -106,7 +106,7 @@ READ — Other:
 - city settings / dispatch config → city_config_lookup
 - currency for a country → flexible_query on "countrycurrency" with filter {"country.code":"XX"}
 READ — Finance / Earnings:
-IMPORTANT — City names: Backend cities often use LOCAL names, not English. DZ → "Alger" (NOT "Algiers"), "Oran", "Constantine", "Annaba"; MA → "Casablanca", "Rabat"; TN → "Tunis". If a finance tool returns 0 results and the suggestion says city name mismatch, call flexible_query on the "city" collection with filter {"country_code":"XX"} and project {"state":1} to get valid city names.
+IMPORTANT — City names: Backend cities often use LOCAL names, not English. DZ → "Alger Center" (NOT "Algiers"), "Oran", "Constantine", "Annaba"; MA → "Casablanca", "Rabat"; TN → "Tunis". If a finance tool returns 0 results and the suggestion says city name mismatch, call flexible_query on the "city" collection with filter {"country_code":"XX"} and project {"state":1} to get valid city names.
 - platform earnings / admin earnings / "how much did we earn" → get_admin_earnings (filters: city, area, service, date range). Works without city — defaults to last 30 days of all cities.
 - OFSE earnings / "orders for someone else" → get_admin_earnings with ofse=true
 - driver payouts / driver earnings → CASCADING FLOW (2 steps, BOTH required):

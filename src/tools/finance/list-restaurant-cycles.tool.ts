@@ -8,7 +8,7 @@ export const listRestaurantCyclesSchema = z.object({
     .string()
     .describe(
       'City name exactly as known by the backend (required). ' +
-        'Examples by country: DZ → "Alger", "Oran", "Constantine"; MA → "Casablanca", "Rabat"; TN → "Tunis". ' +
+        'Examples by country: DZ → "Alger Center", "Oran", "Constantine"; MA → "Casablanca", "Rabat"; TN → "Tunis". ' +
         'If unsure, use flexible_query on the "city" collection filtered by country_code to discover valid city names.',
     ),
   status: z.number().min(0).max(8).optional().describe('Filter by cycle status: 0=Invalid, 1=Active, 2=In Review, 3=Settled, 4=Paid, 5=Interrupted, 6=Cancelled, 7=Settling, 8=Manually Settled'),
@@ -54,7 +54,7 @@ export async function listRestaurantCyclesHandler(params: Params, ctx?: AuthCont
           'Try using flexible_query on the "city" collection with filter {"country_code":"' +
           (cc ?? 'DZ') +
           '"} to discover the exact city names available. ' +
-          'Common names: DZ uses "Alger" (not "Algiers"), MA uses "Casablanca", TN uses "Tunis".',
+          'Common names: DZ uses "Alger Center" (not "Algiers"), MA uses "Casablanca", TN uses "Tunis".',
       },
       _debug: {
         query: `API GET /restaurant/cycles?city=${params.city}`,
